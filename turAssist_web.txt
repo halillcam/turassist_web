@@ -1,0 +1,63 @@
+turAssist uygulamasının web tarafı yani yönetim tarafı olacak
+içerisinde 2 farklı ui olacak admin ve super_admin olarak ayrılacak
+
+admin tarafı
+- tur işlemleri, feedback ekranı ,
+  tur ekle, tur sil, tur güncelle, bildirimler, aktif turlar, pasif turlar, geçmiş turlar,  tur bitirme onay ekranı,
+
+tur ekle : 
+Tur başlığı, açıklama, fiyat, kontenjan, şehir,Bölge, görsel url, rehber adı, Çıkış takvimi,Çıkış saati tur programı, araç bilgileri, Şoför adı,soför telefonu,plaka,
+
+tur güncelle : tur id sine göre bütün başlıklar düzenlenebilir, 
+
+tur detayı : 
+burası kritik burada şunlar olacak
+Katılımcıları gör, katılımcı ekle, Tur sorumlusu ekle
+
+Katılımcı ekleme : 
+id pw ile katılımcı eklenir, eklenen katılımcı direkt mobil taraftaki tur detaylarına gidebilir. QR okutmasına gerek yok.
+
+
+
+Aktif turlar : 
+tur detayı bu kategoridedir aktif olan yani pasif olmayan turlar görünür.
+
+pasif turlar : 
+tur detayları yine olur geçmiş ve gelecek diye ayrılır firebase deki cihaz saatine göre aktif pasif ayrımı yapılır
+
+tur sorumlusu ekleme : 
+ilgili tur aktif yada pasif ten seçilir özel id pw oluşturulur bu oluşturulan user ın id si ilgili tur un guide_id sine yazılır ve mobil app ten girdiğinde
+tur sorumlusu olarak girer.
+
+katılımcı ekleme : 
+şirket admini aktif yada pasif turlardan bir tur seçer ve bu paneli kullanarak bir id pw oluşturur ve bu id pw ile mobil app e giriş yapan kullanıcı turlarım sekmesinde direkt aktif tur detayı ekranında olur. bu yapı app te satın almayanlarında aktif tur detaylarını kullanabilmesi içindir.
+
+feedback ekranı : 
+burada super_admin e mesaj atılır herhangi bir sorun veya durum için burada sorunun başlığı ve açıklaması olur
+
+bildirimler:
+bu ekranda super_admin tarafından gelen bildirimler olur
+
+tur bitirme onay ekranı :
+tur bittiğinde tur sorumlusu mobil app ten tur bitti seçeneğine tıklar ve buraya bir istek düşer eğer admin onaylarsa ilgili tur pasif hale gelir, tur sorumlusu id pw si pasif hale gelir, mobil taraftaki aktif tur ekranı yerini turlarım ekranı alır, state değişir yani
+
+
+-------------- super_admin----------------------
+bu tarafta 
+şirket listesi,kullanıcı listesi, aktif pasif turlar (şirketlere göre), şirket ekle,güncelle,sil , bildirim, feedback
+
+şirket ekle:
+şirket title ı, ve id pw oluşturma, telefon no, ad soyad
+id pw ile oluşturulan şirket admin rolünü alır alır ve yukarıdaki admin özelliklerine erişebilir yalnızca web uygulaması ile giriş yapabilir.
+
+şirket listesi : 
+aktif ve pasif şirketler burada görünür
+
+aktif pasif turlar : 
+burada adminin sorun yaşadığı yerler için oluşturulmuş alanlar mevcut admin rolündeki tur ile alakalı herşey burada olacak tur ekle, sil,güncelle,katılımcı ekle, vs 
+
+bildirim: 
+aktif şirketlere bildirim gönderilir push notification, 
+
+feedback : feedback ekranında ilgili şirketin id si, gönderilen feedback title ı açıklaması görünür, şirket admin telefon no ve ad soyad ı görünür.
+
