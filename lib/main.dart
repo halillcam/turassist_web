@@ -1,20 +1,11 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:turassist_web/firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyBq9IykvQE_Jx0N1sVzYwTrDdeuDV_A32I",
-      authDomain: "turassist-6fdc8.firebaseapp.com",
-      projectId: "turassist-6fdc8",
-      storageBucket: "turassist-6fdc8.firebasestorage.app",
-      messagingSenderId: "138121353976",
-      appId: "1:138121353976:web:4b1ae803577a3c658f790d",
-      measurementId: "G-7XNR9BMFHR",
-    ),
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
