@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../../core/widgets/custom_button.dart';
+import '../../controllers/company_controller.dart';
 
 class AddCompanyScreen extends StatefulWidget {
   const AddCompanyScreen({super.key});
@@ -13,34 +15,48 @@ class AddCompanyScreen extends StatefulWidget {
 
 class _AddCompanyScreenState extends State<AddCompanyScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _companyTitleController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _fullNameController = TextEditingController();
-  bool _isLoading = false;
+  final _companyTitleCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _fullNameCtrl = TextEditingController();
 
   @override
   void dispose() {
-    _companyTitleController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _phoneController.dispose();
-    _fullNameController.dispose();
+    _companyTitleCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    _phoneCtrl.dispose();
+    _fullNameCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _handleAddCompany() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    // TODO: Firebase Auth ile admin kullanıcı oluşturulacak
-    // Şirket Firestore'a kaydedilecek
-    // Oluşturulan kullanıcı admin rolü alacak, yalnızca web ile giriş yapabilecek
-    setState(() => _isLoading = false);
+    final controller = Get.find<CompanyController>();
+
+    try {
+      await controller.addCompany(
+        companyName: _companyTitleCtrl.text.trim(),
+        fullName: _fullNameCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        password: _passwordCtrl.text.trim(),
+      );
+      _companyTitleCtrl.clear();
+      _emailCtrl.clear();
+      _passwordCtrl.clear();
+      _phoneCtrl.clear();
+      _fullNameCtrl.clear();
+    } catch (_) {
+      // Snackbar zaten controller'da gösteriliyor
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final controller = Get.find<CompanyController>();
+
     return Scaffold(
       appBar: AppBar(title: const Text(AppStrings.addCompany)),
       body: Center(
@@ -70,40 +86,42 @@ class _AddCompanyScreenState extends State<AddCompanyScreen> {
                   const SizedBox(height: 24),
                   CustomTextField(
                     label: 'Şirket Adı',
-                    controller: _companyTitleController,
-                    validator: (v) => v?.isEmpty == true ? 'Zorunlu alan' : null,
+                    controller: _companyTitleCtrl,
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Zorunlu alan' : null,
                   ),
                   CustomTextField(
                     label: 'Ad Soyad',
-                    controller: _fullNameController,
-                    validator: (v) => v?.isEmpty == true ? 'Zorunlu alan' : null,
+                    controller: _fullNameCtrl,
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Zorunlu alan' : null,
                   ),
                   CustomTextField(
                     label: 'Telefon No',
-                    controller: _phoneController,
+                    controller: _phoneCtrl,
                     keyboardType: TextInputType.phone,
-                    validator: (v) => v?.isEmpty == true ? 'Zorunlu alan' : null,
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Zorunlu alan' : null,
                   ),
                   CustomTextField(
                     label: 'E-posta (ID)',
-                    controller: _emailController,
+                    controller: _emailCtrl,
                     keyboardType: TextInputType.emailAddress,
-                    validator: (v) => v?.isEmpty == true ? 'Zorunlu alan' : null,
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Zorunlu alan' : null,
                   ),
                   CustomTextField(
                     label: 'Şifre',
-                    controller: _passwordController,
+                    controller: _passwordCtrl,
                     obscureText: true,
-                    validator: (v) => v?.isEmpty == true ? 'Zorunlu alan' : null,
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Zorunlu alan' : null,
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
-                    child: CustomButton(
-                      text: AppStrings.save,
-                      onPressed: _handleAddCompany,
-                      isLoading: _isLoading,
-                      icon: Icons.business,
+                    child: Obx(
+                      () => CustomButton(
+                        text: AppStrings.save,
+                        onPressed: _handleAddCompany,
+                        isLoading: controller.isLoading.value,
+                        icon: Icons.business,
+                      ),
                     ),
                   ),
                 ],

@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:turassist_web/firebase_options.dart';
 import 'package:turassist_web/core/constants/app_routes.dart';
 import 'package:turassist_web/core/constants/app_strings.dart';
@@ -16,7 +17,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return GetMaterialApp(
       title: AppStrings.appTitle,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
