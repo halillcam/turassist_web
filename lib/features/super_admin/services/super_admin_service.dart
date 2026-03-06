@@ -1,59 +1,71 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/company_model.dart';
-import '../../../core/models/tour_model.dart';
-import '../../../core/models/ticket_model.dart';
-import '../../../core/models/user_model.dart';
 import '../../../core/models/feedback_model.dart';
 import '../../../core/models/notification_model.dart';
+import '../../../core/models/ticket_model.dart';
+import '../../../core/models/tour_model.dart';
+import '../../../core/models/user_model.dart';
+import '../../../core/services/auth_service.dart';
 
+/// Super admin rolünün tüm işlemlerini yöneten merkezi servis.
+///
+/// Kullanıcı oluşturma işlemlerinde [AuthService.createSecondaryAuthUser]
+/// kullanılır; böylece mevcut super-admin oturumu hiçbir zaman kapatılmaz.
 class SuperAdminService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // ─── Yardımcı: Mevcut oturumu bozmadan yeni Auth user oluşturur ───
-  Future<String> _createAuthUser(String email, String password) async {
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final app = await Firebase.initializeApp(name: 'temp_$ts', options: Firebase.app().options);
-    try {
-      final secondaryAuth = FirebaseAuth.instanceFor(app: app);
-      final credential = await secondaryAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      final uid = credential.user!.uid;
-      await secondaryAuth.signOut();
-      return uid;
-    } finally {
-      await app.delete();
-    }
-  }
+  // ─── Yardımcı ─────────────────────────────────────────────────────────────
 
-  // ━━━━━━━━━━━━━ Şirketler ━━━━━━━━━━━━━
+  Future<String> _createAuthUser(String email, String password) =>
+      AuthService.createSecondaryAuthUser(email, password);
 
+  // ━━━━━━━━━━━━━ Şirketler ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /// Aktif veya pasif şirketlerin gerçek zamanlı akışı.
   Stream<List<CompanyModel>> streamCompanies(bool isActive) {
     return _firestore
         .collection('companies')
         .where('status', isEqualTo: isActive)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => CompanyModel.fromMap(doc.data(), doc.id)).toList());
+        .map(_toCompanyList);
   }
 
+  /// Tüm aktif şirketlerin gerçek zamanlı akışı.
   Stream<List<CompanyModel>> streamAllActiveCompanies() {
     return _firestore
         .collection('companies')
         .where('status', isEqualTo: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => CompanyModel.fromMap(doc.data(), doc.id)).toList());
+        .map(_toCompanyList);
   }
 
+  /// Tek şirket getirir; bulunamazsa null döner.
   Future<CompanyModel?> getCompany(String companyId) async {
     final doc = await _firestore.collection('companies').doc(companyId).get();
-    final data = doc.data();
-    if (!doc.exists || data == null) return null;
-    return CompanyModel.fromMap(data, doc.id);
+    if (!doc.exists || doc.data() == null) return null;
+    return CompanyModel.fromMap(doc.data()!, doc.id);
   }
 
+  /// Admin UID'sine göre bağlı şirketi getirir.
+  Future<CompanyModel?> getCompanyByAdminUid(String adminUid) async {
+    final snap = await _firestore
+        .collection('companies')
+        .where('admin_uid', isEqualTo: adminUid)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final doc = snap.docs.first;
+    return CompanyModel.fromMap(doc.data(), doc.id);
+  }
+
+  /// Yeni şirket ve ona bağlı admin kullanıcısını atomik batch ile oluşturur.
+  ///
+  /// İşlem sırası:
+  /// 1. Firebase Auth'ta admin kullanıcısı oluşturulur (mevcut oturum korunur).
+  /// 2. `companies` koleksiyonuna şirket dokümanı eklenir.
+  /// 3. `users` koleksiyonuna admin kullanıcısı eklenir.
+  ///
+  /// Adım 2 ve 3 tek bir atomik Firestore batch'iyle yazılır.
   Future<void> addCompany({
     required String companyName,
     required String fullName,
@@ -61,57 +73,101 @@ class SuperAdminService {
     required String email,
     required String password,
     String city = '',
+    String logo = '',
   }) async {
     final uid = await _createAuthUser(email, password);
 
-    // Şirket dokümanı
-    final company = CompanyModel(
-      companyName: companyName,
-      city: city,
-      contactPhone: phone,
-      adminUid: uid,
-      status: true,
-    );
-    final companyDoc = await _firestore.collection('companies').add(company.toMap());
+    // Doküman referansını önceden üret — companyId'ye ihtiyaç var.
+    final companyRef = _firestore.collection('companies').doc();
+    final companyId = companyRef.id;
 
-    // Admin kullanıcı dokümanı
-    final user = UserModel(
-      uid: uid,
-      fullName: fullName,
-      email: email,
-      phone: phone,
-      role: 'admin',
-      companyId: companyDoc.id,
-      registeredCompanies: [companyDoc.id],
+    final batch = _firestore.batch();
+
+    batch.set(
+      companyRef,
+      CompanyModel(
+        id: companyId,
+        companyName: companyName,
+        city: city,
+        contactPhone: phone,
+        logo: logo,
+        adminUid: uid,
+        status: true,
+      ).toMap(),
     );
-    await _firestore.collection('users').doc(uid).set(user.toMap());
+
+    batch.set(
+      _firestore.collection('users').doc(uid),
+      UserModel(
+        uid: uid,
+        fullName: fullName,
+        email: email,
+        phone: phone,
+        role: 'admin',
+        companyId: companyId,
+        registeredCompanies: [companyId],
+      ).toMap(),
+    );
+
+    await batch.commit();
   }
 
+  /// Şirket alanlarını kısmen günceller.
   Future<void> updateCompany(String companyId, Map<String, dynamic> data) {
     return _firestore.collection('companies').doc(companyId).update(data);
   }
 
-  // ━━━━━━━━━━━━━ Kullanıcılar ━━━━━━━━━━━━━
+  /// Şirketi aktif ya da pasif yapar.
+  Future<void> setCompanyStatus(String companyId, {required bool isActive}) {
+    return _firestore.collection('companies').doc(companyId).update({'status': isActive});
+  }
 
+  // ━━━━━━━━━━━━━ Kullanıcılar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /// Silinmemiş tüm kullanıcıların gerçek zamanlı akışı.
   Stream<List<UserModel>> streamAllUsers() {
     return _firestore
         .collection('users')
         .where('isDeleted', isEqualTo: false)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => UserModel.fromMap(doc.data(), doc.id)).toList());
+        .map(_toUserList);
   }
 
-  // ━━━━━━━━━━━━━ Turlar ━━━━━━━━━━━━━
+  /// Belirli bir şirkete ait silinmemiş kullanıcıların gerçek zamanlı akışı.
+  Stream<List<UserModel>> streamUsersByCompany(String companyId) {
+    return _firestore
+        .collection('users')
+        .where('companyId', isEqualTo: companyId)
+        .where('isDeleted', isEqualTo: false)
+        .snapshots()
+        .map(_toUserList);
+  }
 
+  /// UID'ye göre kullanıcı getirir; bulunamazsa null döner.
+  Future<UserModel?> getUserByUid(String uid) async {
+    final doc = await _firestore.collection('users').doc(uid).get();
+    if (!doc.exists || doc.data() == null) return null;
+    return UserModel.fromMap(doc.data()!, doc.id);
+  }
+
+  /// Kullanıcıyı soft-delete ile pasife alır.
+  Future<void> deactivateUser(String uid) {
+    return _firestore.collection('users').doc(uid).update({'isDeleted': true});
+  }
+
+  // ━━━━━━━━━━━━━ Turlar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /// Tüm şirketlerdeki aktif veya pasif turların gerçek zamanlı akışı.
   Stream<List<TourModel>> streamAllTours({required bool isDeleted}) {
     return _firestore
         .collection('tours')
         .where('isDeleted', isEqualTo: isDeleted)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => TourModel.fromMap(doc.data(), doc.id)).toList());
+        .map(_toTourList);
   }
 
+  /// Belirli bir şirketin aktif veya pasif turlarının gerçek zamanlı akışı.
   Stream<List<TourModel>> streamToursByCompany(String companyId, {required bool isDeleted}) {
     return _firestore
         .collection('tours')
@@ -119,39 +175,43 @@ class SuperAdminService {
         .where('isDeleted', isEqualTo: isDeleted)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => TourModel.fromMap(doc.data(), doc.id)).toList());
+        .map(_toTourList);
   }
 
+  /// Tur ekler; dönen değer oluşturulan dokümanın ID'sidir.
   Future<String> addTour(TourModel tour) async {
-    final docRef = await _firestore.collection('tours').add(tour.toMap());
-    return docRef.id;
+    final ref = await _firestore.collection('tours').add(tour.toMap());
+    return ref.id;
   }
 
+  /// Tur günceller — yalnızca gönderilen alanlar değişir (kısmi güncelleme).
   Future<void> updateTour(String tourId, Map<String, dynamic> data) {
     return _firestore.collection('tours').doc(tourId).update(data);
   }
 
+  /// Soft-delete: `isDeleted = true` yapılır, veri kaybolmaz.
   Future<void> deleteTour(String tourId) {
     return _firestore.collection('tours').doc(tourId).update({'isDeleted': true});
   }
 
+  /// Tek tur getirir; bulunamazsa null döner.
   Future<TourModel?> getTour(String tourId) async {
     final doc = await _firestore.collection('tours').doc(tourId).get();
-    final data = doc.data();
-    if (!doc.exists || data == null) return null;
-    return TourModel.fromMap(data, doc.id);
+    if (!doc.exists || doc.data() == null) return null;
+    return TourModel.fromMap(doc.data()!, doc.id);
   }
 
+  /// Tek turun gerçek zamanlı akışı.
   Stream<TourModel?> streamTour(String tourId) {
     return _firestore.collection('tours').doc(tourId).snapshots().map((doc) {
-      final data = doc.data();
-      if (!doc.exists || data == null) return null;
-      return TourModel.fromMap(data, doc.id);
+      if (!doc.exists || doc.data() == null) return null;
+      return TourModel.fromMap(doc.data()!, doc.id);
     });
   }
 
-  // ━━━━━━━━━━━━━ Katılımcılar (Ticket) ━━━━━━━━━━━━━
+  // ━━━━━━━━━━━━━ Katılımcılar (Ticket) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  /// Bir turdaki tüm biletlerin gerçek zamanlı akışı.
   Stream<List<TicketModel>> streamTourTickets(String tourId) {
     return _firestore
         .collection('tickets')
@@ -160,6 +220,10 @@ class SuperAdminService {
         .map((snap) => snap.docs.map((doc) => TicketModel.fromMap(doc.data(), doc.id)).toList());
   }
 
+  /// Super admin adına dışarıdan müşteri ekler.
+  ///
+  /// `isScanned = true` olarak ayarlanır; müşteri QR okutmadan tur detayına
+  /// erişebilir. Kullanıcı ve bilet tek atomik Firestore batch'iyle yazılır.
   Future<void> addParticipantToTour({
     required String email,
     required String password,
@@ -173,34 +237,46 @@ class SuperAdminService {
   }) async {
     final uid = await _createAuthUser(email, password);
 
-    final user = UserModel(
-      uid: uid,
-      fullName: fullName,
-      email: email,
-      phone: phone,
-      role: 'customer',
-      companyId: companyId,
-      tcNo: tcNo,
-      registeredCompanies: [companyId],
-    );
-    await _firestore.collection('users').doc(uid).set(user.toMap());
+    final batch = _firestore.batch();
 
-    final ticket = TicketModel(
-      tourId: tourId,
-      userId: uid,
-      companyId: companyId,
-      passengerName: fullName,
-      tcNo: tcNo,
-      pricePaid: pricePaid,
-      isScanned: true,
-      status: 'active',
-      departureDate: departureDate,
+    batch.set(
+      _firestore.collection('users').doc(uid),
+      UserModel(
+        uid: uid,
+        fullName: fullName,
+        email: email,
+        phone: phone,
+        role: 'customer',
+        companyId: companyId,
+        tcNo: tcNo,
+        registeredCompanies: [companyId],
+      ).toMap(),
     );
-    await _firestore.collection('tickets').add(ticket.toMap());
+
+    batch.set(
+      _firestore.collection('tickets').doc(),
+      TicketModel(
+        tourId: tourId,
+        userId: uid,
+        companyId: companyId,
+        passengerName: fullName,
+        tcNo: tcNo,
+        pricePaid: pricePaid,
+        isScanned: true,
+        status: 'active',
+        departureDate: departureDate,
+      ).toMap(),
+    );
+
+    await batch.commit();
   }
 
-  // ━━━━━━━━━━━━━ Tur Sorumlusu (Guide) ━━━━━━━━━━━━━
+  // ━━━━━━━━━━━━━ Tur Sorumlusu (Rehber) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  /// Yeni rehber kullanıcısı oluşturur ve tura atar.
+  ///
+  /// Kullanıcı oluşturma, `users` dokümanı yazma ve tur'un `guideId/guideName`
+  /// güncellenmesi tek atomik batch ile gerçekleşir.
   Future<void> addGuideToTour({
     required String email,
     required String password,
@@ -211,86 +287,156 @@ class SuperAdminService {
   }) async {
     final uid = await _createAuthUser(email, password);
 
-    final user = UserModel(
-      uid: uid,
-      fullName: fullName,
-      email: email,
-      phone: phone,
-      role: 'guide',
-      companyId: companyId,
-    );
-    await _firestore.collection('users').doc(uid).set(user.toMap());
+    final batch = _firestore.batch();
 
-    await _firestore.collection('tours').doc(tourId).update({
+    batch.set(
+      _firestore.collection('users').doc(uid),
+      UserModel(
+        uid: uid,
+        fullName: fullName,
+        email: email,
+        phone: phone,
+        role: 'guide',
+        companyId: companyId,
+      ).toMap(),
+    );
+
+    batch.update(_firestore.collection('tours').doc(tourId), {
       'guideId': uid,
       'guideName': fullName,
     });
+
+    await batch.commit();
   }
 
-  // ━━━━━━━━━━━━━ Bildirimler ━━━━━━━━━━━━━
+  // ━━━━━━━━━━━━━ Bildirimler ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  /// Belirli bir şirkete bildirim gönderir.
   Future<void> sendNotificationToCompany({
     required String title,
     required String body,
     required String targetCompanyId,
   }) {
-    final notification = NotificationModel(
-      title: title,
-      body: body,
-      targetCompanyId: targetCompanyId,
-      senderRole: 'super_admin',
-    );
-    return _firestore.collection('notifications').add(notification.toMap());
+    return _firestore
+        .collection('notifications')
+        .add(
+          NotificationModel(
+            title: title,
+            body: body,
+            targetCompanyId: targetCompanyId,
+            senderRole: 'super_admin',
+          ).toMap(),
+        );
   }
 
+  /// Birden fazla şirkete toplu bildirim gönderir.
+  ///
+  /// Firestore batch limiti (500) aşılmayacak şekilde 400'lük gruplara bölünür.
   Future<void> sendNotificationToAll({
     required String title,
     required String body,
     required List<String> companyIds,
   }) async {
-    final batch = _firestore.batch();
-    for (final companyId in companyIds) {
-      final doc = _firestore.collection('notifications').doc();
-      batch.set(
-        doc,
-        NotificationModel(
-          title: title,
-          body: body,
-          targetCompanyId: companyId,
-          senderRole: 'super_admin',
-        ).toMap(),
-      );
+    if (companyIds.isEmpty) return;
+
+    const chunkSize = 400;
+    for (var i = 0; i < companyIds.length; i += chunkSize) {
+      final batch = _firestore.batch();
+      for (final companyId in companyIds.skip(i).take(chunkSize)) {
+        batch.set(
+          _firestore.collection('notifications').doc(),
+          NotificationModel(
+            title: title,
+            body: body,
+            targetCompanyId: companyId,
+            senderRole: 'super_admin',
+          ).toMap(),
+        );
+      }
+      await batch.commit();
     }
-    await batch.commit();
   }
 
+  /// Super admin tarafından gönderilmiş tüm bildirimlerin stream'i (yeniden eskiye).
   Stream<List<NotificationModel>> streamSentNotifications() {
     return _firestore
         .collection('notifications')
         .where('senderRole', isEqualTo: 'super_admin')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(
-          (snap) => snap.docs.map((doc) => NotificationModel.fromMap(doc.data(), doc.id)).toList(),
-        );
+        .map(_toNotificationList);
   }
 
-  // ━━━━━━━━━━━━━ Geri Bildirimler ━━━━━━━━━━━━━
+  /// Belirli bir şirkete gönderilmiş bildirimlerin stream'i.
+  Stream<List<NotificationModel>> streamNotificationsByCompany(String companyId) {
+    return _firestore
+        .collection('notifications')
+        .where('targetCompanyId', isEqualTo: companyId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(_toNotificationList);
+  }
 
+  /// Bildirimi kalıcı olarak siler.
+  Future<void> deleteNotification(String notificationId) {
+    return _firestore.collection('notifications').doc(notificationId).delete();
+  }
+
+  // ━━━━━━━━━━━━━ Geri Bildirimler ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /// Tüm şirketlerden gelen geri bildirimlerin stream'i (yeniden eskiye).
   Stream<List<FeedbackModel>> streamAllFeedbacks() {
     return _firestore
         .collection('feedbacks')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => FeedbackModel.fromMap(doc.data(), doc.id)).toList());
+        .map(_toFeedbackList);
   }
 
-  // ━━━━━━━━━━━━━ Şirket Admin Bilgisi Getir ━━━━━━━━━━━━━
+  /// Belirli bir şirkete ait geri bildirimlerin stream'i.
+  Stream<List<FeedbackModel>> streamFeedbacksByCompany(String companyId) {
+    return _firestore
+        .collection('feedbacks')
+        .where('companyId', isEqualTo: companyId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(_toFeedbackList);
+  }
 
-  Future<UserModel?> getUserByUid(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    final data = doc.data();
-    if (!doc.exists || data == null) return null;
-    return UserModel.fromMap(data, doc.id);
+  /// Geri bildirimi kalıcı olarak siler.
+  Future<void> deleteFeedback(String feedbackId) {
+    return _firestore.collection('feedbacks').doc(feedbackId).delete();
+  }
+
+  // ─── Dönüştürücüler ───────────────────────────────────────────────────────
+
+  static List<CompanyModel> _toCompanyList(QuerySnapshot snap) {
+    return snap.docs
+        .map((doc) => CompanyModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
+  }
+
+  static List<TourModel> _toTourList(QuerySnapshot snap) {
+    return snap.docs
+        .map((doc) => TourModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
+  }
+
+  static List<UserModel> _toUserList(QuerySnapshot snap) {
+    return snap.docs
+        .map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
+  }
+
+  static List<NotificationModel> _toNotificationList(QuerySnapshot snap) {
+    return snap.docs
+        .map((doc) => NotificationModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
+  }
+
+  static List<FeedbackModel> _toFeedbackList(QuerySnapshot snap) {
+    return snap.docs
+        .map((doc) => FeedbackModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
   }
 }

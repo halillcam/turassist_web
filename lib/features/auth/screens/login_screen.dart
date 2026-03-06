@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/custom_button.dart';
 
@@ -16,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
   bool _isLoading = false;
 
   @override
@@ -25,11 +28,67 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// E-posta ve şifreyi doğrular, kullanıcının rolüne göre ilgili dashboard'a yönlendirir.
+  /// Hesap silinmiş ya da rol tanımsızsa hata snackbar'ı gösterir.
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
-    // TODO: Auth service ile giriş yapılacak
-    setState(() => _isLoading = false);
+    try {
+      final user = await _authService.signIn(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+
+      if (user == null) {
+        _showError('Kullanıcı bulunamadı. Lütfen bilgilerinizi kontrol edin.');
+        return;
+      }
+
+      final route = switch (user.role) {
+        'super_admin' => AppRoutes.superAdminDashboard,
+        'admin' => AppRoutes.adminDashboard,
+        _ => null,
+      };
+
+      if (route == null) {
+        _showError('Bu hesabın bu panele erişim izni bulunmuyor. (Rol: ${user.role})');
+        return;
+      }
+
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, route, (r) => false);
+      }
+    } catch (e) {
+      _showError(_friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Firebase/StateError mesajlarını kullanıcı dostu Türkçe'ye çevirir.
+  String _friendlyError(Object e) {
+    final msg = e.toString();
+    if (msg.contains('user-not-found') || msg.contains('invalid-credential')) {
+      return 'E-posta veya şifre hatalı.';
+    }
+    if (msg.contains('wrong-password')) return 'Şifre hatalı.';
+    if (msg.contains('invalid-email')) return 'Geçersiz e-posta adresi.';
+    if (msg.contains('too-many-requests')) return 'Çok fazla deneme. Lütfen bekleyin.';
+    if (msg.contains('network-request-failed')) return 'İnternet bağlantısı yok.';
+    if (msg.contains('devre dışı')) return msg.replaceFirst('Bad state: ', '');
+    return 'Giriş başarısız: $msg';
+  }
+
+  void _showError(String message) {
+    Get.snackbar(
+      'Giriş Başarısız',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: AppColors.error,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 4),
+    );
   }
 
   @override

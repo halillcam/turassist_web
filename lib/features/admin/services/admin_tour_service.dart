@@ -1,29 +1,37 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../core/models/tour_model.dart';
-import '../../../core/models/ticket_model.dart';
-import '../../../core/models/user_model.dart';
 import '../../../core/models/feedback_model.dart';
 import '../../../core/models/notification_model.dart';
+import '../../../core/models/ticket_model.dart';
 import '../../../core/models/tour_completion_request_model.dart';
+import '../../../core/models/tour_model.dart';
+import '../../../core/models/user_model.dart';
+import '../../../core/services/auth_service.dart';
 
+/// Admin rolündeki şirket yöneticilerinin kullandığı tur servisi.
+///
+/// Kullanıcı oluşturma işlemlerinde [AuthService.createSecondaryAuthUser]
+/// kullanılır; böylece katılımcı veya rehber eklenirken mevcut admin oturumu
+/// hiçbir zaman kapatılmaz.
 class AdminTourService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  String? get currentUid => _auth.currentUser?.uid;
+  String? get _currentUid => _auth.currentUser?.uid;
 
-  // ─── Şirket ID ───
+  // ─── Şirket ID ──────────────────────────────────────────────────────────
+
+  /// Oturumda bulunan admin kullanıcısının `companyId` değerini getirir.
   Future<String?> getCurrentCompanyId() async {
-    final uid = currentUid;
+    final uid = _currentUid;
     if (uid == null) return null;
     final doc = await _firestore.collection('users').doc(uid).get();
     return doc.data()?['companyId'] as String?;
   }
 
-  // ─── Tur Stream'leri ───
+  // ─── Turlar ─────────────────────────────────────────────────────────────
 
-  /// Aktif turlar: isDeleted == false ve companyId eşleşmesi.
+  /// Aktif (silinmemiş) turların gerçek zamanlı akışı.
   Stream<List<TourModel>> streamActiveTours(String companyId) {
     return _firestore
         .collection('tours')
@@ -31,10 +39,10 @@ class AdminTourService {
         .where('isDeleted', isEqualTo: false)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => TourModel.fromMap(doc.data(), doc.id)).toList());
+        .map(_toTourList);
   }
 
-  /// Pasif turlar: isDeleted == true ve companyId eşleşmesi.
+  /// Pasif (silinmiş) turların gerçek zamanlı akışı.
   Stream<List<TourModel>> streamDeletedTours(String companyId) {
     return _firestore
         .collection('tours')
@@ -42,40 +50,43 @@ class AdminTourService {
         .where('isDeleted', isEqualTo: true)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => TourModel.fromMap(doc.data(), doc.id)).toList());
+        .map(_toTourList);
   }
 
-  // ─── Tur CRUD ───
-
+  /// Yeni tur ekler; dönen değer oluşturulan dokümanın ID'sidir.
   Future<String> addTour(TourModel tour) async {
-    final docRef = await _firestore.collection('tours').add(tour.toMap());
-    return docRef.id;
+    final ref = await _firestore.collection('tours').add(tour.toMap());
+    return ref.id;
   }
 
+  /// Tur günceller — yalnızca gönderilen alanlar değişir (kısmi güncelleme).
   Future<void> updateTour(String tourId, Map<String, dynamic> data) {
     return _firestore.collection('tours').doc(tourId).update(data);
   }
 
-  /// Soft-delete: isDeleted = true yapılır.
+  /// Soft-delete: `isDeleted = true` yapılır, veri kaybolmaz.
   Future<void> deleteTour(String tourId) {
     return _firestore.collection('tours').doc(tourId).update({'isDeleted': true});
   }
 
+  /// Tek tur getirir; bulunamazsa null döner.
   Future<TourModel?> getTour(String tourId) async {
     final doc = await _firestore.collection('tours').doc(tourId).get();
-    if (!doc.exists) return null;
+    if (!doc.exists || doc.data() == null) return null;
     return TourModel.fromMap(doc.data()!, doc.id);
   }
 
+  /// Tek turun gerçek zamanlı akışı.
   Stream<TourModel?> streamTour(String tourId) {
     return _firestore.collection('tours').doc(tourId).snapshots().map((doc) {
-      if (!doc.exists) return null;
+      if (!doc.exists || doc.data() == null) return null;
       return TourModel.fromMap(doc.data()!, doc.id);
     });
   }
 
-  // ─── Katılımcılar (Ticket) ───
+  // ─── Katılımcılar (Ticket) ───────────────────────────────────────────────
 
+  /// Bir turdaki tüm biletlerin gerçek zamanlı akışı.
   Stream<List<TicketModel>> streamTourTickets(String tourId) {
     return _firestore
         .collection('tickets')
@@ -84,7 +95,13 @@ class AdminTourService {
         .map((snap) => snap.docs.map((doc) => TicketModel.fromMap(doc.data(), doc.id)).toList());
   }
 
-  /// Dışarıdan müşteri ekleme: user oluştur + ticket oluştur (isScanned: true).
+  /// Dışarıdan müşteri ekler: yeni Firebase Auth kullanıcısı + `users` dokümanı
+  /// + `tickets` dokümanı tek atomik Firestore batch'iyle oluşturulur.
+  ///
+  /// `isScanned = true` olduğundan müşteri QR okutmadan tur detayına erişebilir.
+  /// Herhangi bir adım başarısız olursa tüm işlem geri alınır.
+  ///
+  /// Mevcut admin oturumu korunur — [AuthService.createSecondaryAuthUser].
   Future<void> addParticipantToTour({
     required String email,
     required String password,
@@ -96,40 +113,48 @@ class AdminTourService {
     required double pricePaid,
     DateTime? departureDate,
   }) async {
-    // Firebase Auth ile kullanıcı oluştur
-    final credential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-    final uid = credential.user!.uid;
+    final uid = await AuthService.createSecondaryAuthUser(email, password);
 
-    // Users collection'a ekle
-    final user = UserModel(
-      uid: uid,
-      fullName: fullName,
-      email: email,
-      phone: phone,
-      role: 'customer',
-      companyId: companyId,
-      tcNo: tcNo,
-      registeredCompanies: [companyId],
-    );
-    await _firestore.collection('users').doc(uid).set(user.toMap());
+    final batch = _firestore.batch();
 
-    // Tickets collection'a ekle — isScanned: true (QR gerekmez)
-    final ticket = TicketModel(
-      tourId: tourId,
-      userId: uid,
-      companyId: companyId,
-      passengerName: fullName,
-      tcNo: tcNo,
-      pricePaid: pricePaid,
-      isScanned: true,
-      status: 'active',
-      departureDate: departureDate,
+    batch.set(
+      _firestore.collection('users').doc(uid),
+      UserModel(
+        uid: uid,
+        fullName: fullName,
+        email: email,
+        phone: phone,
+        role: 'customer',
+        companyId: companyId,
+        tcNo: tcNo,
+        registeredCompanies: [companyId],
+      ).toMap(),
     );
-    await _firestore.collection('tickets').add(ticket.toMap());
+
+    batch.set(
+      _firestore.collection('tickets').doc(),
+      TicketModel(
+        tourId: tourId,
+        userId: uid,
+        companyId: companyId,
+        passengerName: fullName,
+        tcNo: tcNo,
+        pricePaid: pricePaid,
+        isScanned: true,
+        status: 'active',
+        departureDate: departureDate,
+      ).toMap(),
+    );
+
+    await batch.commit();
   }
 
-  // ─── Tur Sorumlusu (Guide) ───
+  // ─── Tur Sorumlusu (Rehber) ─────────────────────────────────────────────
 
+  /// Yeni rehber kullanıcısı oluşturur ve tur'un `guideId` / `guideName`
+  /// alanlarını günceller. Tüm yazma işlemleri tek atomik batch ile yapılır.
+  ///
+  /// Mevcut admin oturumu korunur — [AuthService.createSecondaryAuthUser].
   Future<void> addGuideToTour({
     required String email,
     required String password,
@@ -138,28 +163,46 @@ class AdminTourService {
     required String tourId,
     required String companyId,
   }) async {
-    final credential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-    final uid = credential.user!.uid;
+    final uid = await AuthService.createSecondaryAuthUser(email, password);
 
-    final user = UserModel(
-      uid: uid,
-      fullName: fullName,
-      email: email,
-      phone: phone,
-      role: 'guide',
-      companyId: companyId,
+    final batch = _firestore.batch();
+
+    batch.set(
+      _firestore.collection('users').doc(uid),
+      UserModel(
+        uid: uid,
+        fullName: fullName,
+        email: email,
+        phone: phone,
+        role: 'guide',
+        companyId: companyId,
+      ).toMap(),
     );
-    await _firestore.collection('users').doc(uid).set(user.toMap());
 
-    // Tur'un guideId ve guideName alanlarını güncelle
-    await _firestore.collection('tours').doc(tourId).update({
+    batch.update(_firestore.collection('tours').doc(tourId), {
       'guideId': uid,
       'guideName': fullName,
     });
+
+    await batch.commit();
   }
 
-  // ─── Tur Bitirme Onayı ───
+  /// Mevcut rehberi pasife alır ve tur'daki bağlantısını temizler.
+  Future<void> removeGuideFromTour({required String tourId, required String guideId}) async {
+    final batch = _firestore.batch();
 
+    if (guideId.isNotEmpty) {
+      batch.update(_firestore.collection('users').doc(guideId), {'isDeleted': true});
+    }
+
+    batch.update(_firestore.collection('tours').doc(tourId), {'guideId': '', 'guideName': ''});
+
+    await batch.commit();
+  }
+
+  // ─── Tur Bitirme Onayı ───────────────────────────────────────────────────
+
+  /// Bu şirkete ait, henüz onaylanmamış tur bitirme isteklerinin gerçek zamanlı akışı.
   Stream<List<TourCompletionRequestModel>> streamCompletionRequests(String companyId) {
     return _firestore
         .collection('tour_completion_requests')
@@ -174,7 +217,12 @@ class AdminTourService {
         );
   }
 
-  /// Onaylama: tur pasif yap, guide'ı pasif yap, isteği onayla.
+  /// Tur bitişini onaylar.
+  ///
+  /// Tek atomik batch işlemi ile:
+  /// - Tur `isDeleted = true` yapılır,
+  /// - Rehber kullanıcısı `isDeleted = true` yapılır,
+  /// - İstek `isApproved = true` olarak işaretlenir.
   Future<void> approveTourCompletion({
     required String requestId,
     required String tourId,
@@ -182,15 +230,12 @@ class AdminTourService {
   }) async {
     final batch = _firestore.batch();
 
-    // Tur'u pasif yap
     batch.update(_firestore.collection('tours').doc(tourId), {'isDeleted': true});
 
-    // Guide'ı pasif yap
     if (guideId.isNotEmpty) {
       batch.update(_firestore.collection('users').doc(guideId), {'isDeleted': true});
     }
 
-    // İsteği onayla
     batch.update(_firestore.collection('tour_completion_requests').doc(requestId), {
       'isApproved': true,
     });
@@ -198,18 +243,21 @@ class AdminTourService {
     await batch.commit();
   }
 
+  /// İsteği reddeder ve dokümanı siler.
   Future<void> rejectTourCompletion(String requestId) {
     return _firestore.collection('tour_completion_requests').doc(requestId).delete();
   }
 
-  // ─── Feedback ───
+  // ─── Geri Bildirim ──────────────────────────────────────────────────────
 
+  /// Super admin'e geri bildirim gönderir.
   Future<void> sendFeedback(FeedbackModel feedback) {
     return _firestore.collection('feedbacks').add(feedback.toMap());
   }
 
-  // ─── Bildirimler ───
+  // ─── Bildirimler ────────────────────────────────────────────────────────
 
+  /// Bu şirkete gönderilmiş tüm bildirimlerin gerçek zamanlı akışı (yeniden eskiye).
   Stream<List<NotificationModel>> streamNotifications(String companyId) {
     return _firestore
         .collection('notifications')
@@ -221,7 +269,48 @@ class AdminTourService {
         );
   }
 
+  /// Okunmamış bildirim sayısının gerçek zamanlı akışı.
+  Stream<int> streamUnreadNotificationCount(String companyId) {
+    return _firestore
+        .collection('notifications')
+        .where('targetCompanyId', isEqualTo: companyId)
+        .where('isRead', isEqualTo: false)
+        .snapshots()
+        .map((snap) => snap.size);
+  }
+
+  /// Bildirimi okundu olarak işaretler.
   Future<void> markNotificationAsRead(String notificationId) {
     return _firestore.collection('notifications').doc(notificationId).update({'isRead': true});
+  }
+
+  /// Bu şirkete ait tüm okunmamış bildirimleri okundu olarak işaretler.
+  ///
+  /// Firestore batch limiti (500) aşılmayacak şekilde 400'lük gruplara bölünür.
+  Future<void> markAllNotificationsAsRead(String companyId) async {
+    final snap = await _firestore
+        .collection('notifications')
+        .where('targetCompanyId', isEqualTo: companyId)
+        .where('isRead', isEqualTo: false)
+        .get();
+
+    if (snap.docs.isEmpty) return;
+
+    const chunkSize = 400;
+    for (var i = 0; i < snap.docs.length; i += chunkSize) {
+      final batch = _firestore.batch();
+      for (final doc in snap.docs.skip(i).take(chunkSize)) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
+    }
+  }
+
+  // ─── Yardımcılar ────────────────────────────────────────────────────────
+
+  static List<TourModel> _toTourList(QuerySnapshot snap) {
+    return snap.docs
+        .map((doc) => TourModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
   }
 }
