@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/constants/app_routes.dart';
+import '../../../../core/models/tour_model.dart';
+import '../../services/admin_tour_service.dart';
 
 class PassiveToursScreen extends StatefulWidget {
-  const PassiveToursScreen({super.key});
+  final String companyId;
+
+  const PassiveToursScreen({super.key, required this.companyId});
 
   @override
   State<PassiveToursScreen> createState() => _PassiveToursScreenState();
@@ -11,6 +17,7 @@ class PassiveToursScreen extends StatefulWidget {
 
 class _PassiveToursScreenState extends State<PassiveToursScreen>
     with SingleTickerProviderStateMixin {
+  final _service = AdminTourService();
   late TabController _tabController;
 
   @override
@@ -38,61 +45,88 @@ class _PassiveToursScreenState extends State<PassiveToursScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Geçmiş turlar
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Geçmiş Turlar',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    SizedBox(height: 16),
-                    // TODO: Geçmiş pasif turlar listesi
-                    Center(child: Text('Geçmiş turlar yükleniyor...')),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Gelecek turlar
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Gelecek Turlar',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    SizedBox(height: 16),
-                    // TODO: Gelecek pasif turlar listesi
-                    Center(child: Text('Gelecek turlar yükleniyor...')),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+      body: StreamBuilder<List<TourModel>>(
+        stream: _service.streamDeletedTours(widget.companyId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Hata: ${snapshot.error}'));
+          }
+
+          final allTours = snapshot.data ?? [];
+          final now = DateTime.now();
+          final pastTours = allTours
+              .where((t) => t.departureDate != null && t.departureDate!.isBefore(now))
+              .toList();
+          final futureTours = allTours
+              .where((t) => t.departureDate == null || !t.departureDate!.isBefore(now))
+              .toList();
+
+          return TabBarView(
+            controller: _tabController,
+            children: [
+              _buildTourList(pastTours, 'Geçmiş tur bulunmuyor.'),
+              _buildTourList(futureTours, 'Gelecek pasif tur bulunmuyor.'),
+            ],
+          );
+        },
       ),
+    );
+  }
+
+  Widget _buildTourList(List<TourModel> tours, String emptyMessage) {
+    if (tours.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.history, size: 64, color: AppColors.slate300),
+            const SizedBox(height: 16),
+            Text(
+              emptyMessage,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(24),
+      itemCount: tours.length,
+      itemBuilder: (context, index) {
+        final tour = tours[index];
+        final dateFormat = DateFormat('dd.MM.yyyy');
+        final dateText = tour.departureDate != null ? dateFormat.format(tour.departureDate!) : '-';
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.slate100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.tour, color: AppColors.slate400),
+            ),
+            title: Text(tour.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(
+              '${tour.city} • ${tour.region} • $dateText',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+            trailing: Text(
+              '₺${tour.price.toStringAsFixed(0)}',
+              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+            ),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.tourDetail, arguments: tour.id),
+          ),
+        );
+      },
     );
   }
 }

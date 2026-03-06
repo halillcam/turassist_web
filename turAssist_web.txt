@@ -61,3 +61,17 @@ aktif şirketlere bildirim gönderilir push notification,
 
 feedback : feedback ekranında ilgili şirketin id si, gönderilen feedback title ı açıklaması görünür, şirket admin telefon no ve ad soyad ı görünür.
 
+
+
+
+Tur Sorumlusu ekleme : 
+tur seçildiğinde id pw, ad soyad tel no bilgileri girilir bu bilgiler girildiğinde bir uid oluşturulur ve bu uid seçilen tur un guide_id field ına gönderilir
+
+
+tur'a dışarıdan müşteri ekleme :
+buradaki amaç app den tur satın almayan müşterilerinde app i kullanabilmesidir yani müşteri fiziksel olarak tur şirketine gidip yada arayıp tur u satın alabilir.
+ilgili tur seçilecek müşteri ekle ekranı geleck müşteri bilgileri (ad,soyad tel no,) girilecek ve users collectionına iletilecek sonra seçilen tur için tickets collectiondan bir documents oluşturulacak ve isScanned i true olacak ve müşteri kendine verilen id pw ile giriş yaptığında turlarım ekranında aktif tur detaylarını görebilecek.
+
+şirket oluşturma:
+super admin olan ben arayüzümde şirket oluştur a bastığımda, şirket in title ı, admin in ad soyad tel no ve id pw bilgileri girildiğinde, bu bilgiler users collectionına iletilecek, ve bu user ın rolu admin olacak. bu oluşan user ın uid si oluşan şirket in yani companies collection daki admin_uid alanına gidecek. bu sayede sadece kendi şirket bilgilerine erişebilecek ve tur vs girebilecek.
+

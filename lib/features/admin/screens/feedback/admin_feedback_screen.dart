@@ -1,34 +1,62 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../../../core/widgets/custom_text_field.dart';
-import '../../../../core/widgets/custom_button.dart';
+import '../../../../core/models/feedback_model.dart';
+import '../../services/admin_tour_service.dart';
 
 class AdminFeedbackScreen extends StatefulWidget {
-  const AdminFeedbackScreen({super.key});
+  final String companyId;
+
+  const AdminFeedbackScreen({super.key, required this.companyId});
 
   @override
   State<AdminFeedbackScreen> createState() => _AdminFeedbackScreenState();
 }
 
 class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
+  final _service = AdminTourService();
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
+  final _titleCtrl = TextEditingController();
+  final _descriptionCtrl = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
+    _titleCtrl.dispose();
+    _descriptionCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _handleSendFeedback() async {
+  Future<void> _handleSend() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    // TODO: Super Admin'e feedback gönderilecek (Firestore)
-    setState(() => _isLoading = false);
+
+    try {
+      final feedback = FeedbackModel(
+        companyId: widget.companyId,
+        title: _titleCtrl.text.trim(),
+        description: _descriptionCtrl.text.trim(),
+        senderName: '',
+        senderPhone: '',
+      );
+      await _service.sendFeedback(feedback);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Geri bildirim gönderildi.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      _titleCtrl.clear();
+      _descriptionCtrl.clear();
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error));
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -40,18 +68,24 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              AppStrings.feedback,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
+            Row(
+              children: const [
+                Icon(Icons.feedback_outlined, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text(
+                  AppStrings.feedback,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             const Text(
               'Super Admin\'e sorun veya durum bildirimi gönderin.',
-              style: TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 24),
             Card(
@@ -61,25 +95,47 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
                   key: _formKey,
                   child: Column(
                     children: [
-                      CustomTextField(
-                        label: 'Sorun Başlığı',
-                        controller: _titleController,
-                        validator: (v) => v?.isEmpty == true ? 'Zorunlu alan' : null,
-                      ),
-                      CustomTextField(
-                        label: 'Açıklama',
-                        controller: _descriptionController,
-                        maxLines: 5,
-                        validator: (v) => v?.isEmpty == true ? 'Zorunlu alan' : null,
+                      TextFormField(
+                        controller: _titleCtrl,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null,
+                        decoration: InputDecoration(
+                          labelText: 'Konu Başlığı',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
                       ),
                       const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _descriptionCtrl,
+                        maxLines: 5,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null,
+                        decoration: InputDecoration(
+                          labelText: 'Açıklama',
+                          alignLabelWithHint: true,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: CustomButton(
-                          text: 'Gönder',
-                          onPressed: _handleSendFeedback,
-                          isLoading: _isLoading,
-                          icon: Icons.send,
+                        child: ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _handleSend,
+                          icon: _isLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.send),
+                          label: Text(_isLoading ? 'Gönderiliyor...' : 'Gönder'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
                         ),
                       ),
                     ],

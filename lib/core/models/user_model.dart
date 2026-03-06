@@ -1,57 +1,81 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum UserRole { admin, superAdmin, guide, participant }
-
 class UserModel {
-  final String? id;
-  final String email;
+  /// Firebase Auth belge ID'si.
+  final String? uid;
   final String fullName;
+  final String email;
   final String phone;
-  final UserRole role;
-  final String? companyId;
-  final String? tourId;
-  final bool isActive;
-  final Timestamp? createdAt;
+
+  /// Kullanıcı rolü: 'customer' | 'guide' | 'admin' | 'super_admin'.
+  final String role;
+
+  /// Kullanıcının bağlı olduğu şirketin ID'si (guide ve admin için).
+  final String companyId;
+
+  /// Kullanıcının erişim yetkisi olan şirket ID listesi.
+  final List<String> registeredCompanies;
+
+  final String tcNo;
+
+  /// Profil fotoğrafı URL'si (opsiyonel).
+  final String? profileImage;
+
+  /// Kullanıcının son seçtiği çıkış şehri.
+  final String selectedCity;
+
+  /// Soft-delete bayrağı; true ise kullanıcı silinmiş kabul edilir.
+  final bool isDeleted;
+
+  final DateTime? createdAt;
 
   UserModel({
-    this.id,
-    required this.email,
+    this.uid,
     required this.fullName,
+    required this.email,
     required this.phone,
     required this.role,
-    this.companyId,
-    this.tourId,
-    this.isActive = true,
+    this.companyId = '',
+    this.registeredCompanies = const [],
+    this.tcNo = '',
+    this.profileImage,
+    this.selectedCity = '',
+    this.isDeleted = false,
     this.createdAt,
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String docId) {
     return UserModel(
-      id: docId,
-      email: map['email'] ?? '',
+      uid: docId,
       fullName: map['fullName'] ?? '',
+      email: map['email'] ?? '',
       phone: map['phone'] ?? '',
-      role: UserRole.values.firstWhere(
-        (e) => e.name == map['role'],
-        orElse: () => UserRole.participant,
-      ),
-      companyId: map['companyId'],
-      tourId: map['tourId'],
-      isActive: map['isActive'] ?? true,
-      createdAt: map['createdAt'],
+      role: map['role'] ?? 'customer',
+      companyId: map['companyId'] ?? '',
+      registeredCompanies: List<String>.from(map['registeredCompanies'] ?? []),
+      tcNo: map['tcNo'] ?? '',
+      profileImage: map['profileImage'],
+      selectedCity: map['selectedCity'] ?? '',
+      isDeleted: map['isDeleted'] ?? false,
+      createdAt: map['createdAt'] != null ? (map['createdAt'] as Timestamp).toDate() : null,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'email': email,
       'fullName': fullName,
+      'email': email,
       'phone': phone,
-      'role': role.name,
+      'role': role,
       'companyId': companyId,
-      'tourId': tourId,
-      'isActive': isActive,
-      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+      'registeredCompanies': registeredCompanies,
+      'tcNo': tcNo,
+      'profileImage': profileImage,
+      'selectedCity': selectedCity,
+      'isDeleted': isDeleted,
+      'createdAt': createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp(),
     };
   }
 }

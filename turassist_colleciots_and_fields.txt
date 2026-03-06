@@ -1,0 +1,117 @@
+companies collection'ı:
+ city string,
+ contactphone string,
+ createdAt timestamp,
+ logo string,
+ companyName string,
+ admin_uid string,
+ status boolean,
+ 
+
+
+tickets collection'ı: 
+   String id;
+   String tourId;
+   String userId;
+   String companyId;
+   String slotId;
+   String passengerName;
+   String tcNo;
+   double pricePaid;
+   String status;
+   String? qrToken;
+   bool isScanned;
+   DateTime purchaseDate;
+   DateTime? scannedAt;
+   DateTime? departureDate;
+
+tours collection'ı: 
+   String id;
+   String title;
+   String description;
+   String extraDetail;
+   double price;
+   String imageUrl;
+   String companyId;
+   String guideId;
+   String? guideName;
+   int capacity;
+   String city;
+   String region;
+   BusInfo busInfo;
+   DateTime createdAt;
+   bool isDeleted;
+
+  /// Haftalık çıkış günleri (1=Pazartesi … 7=Pazar).
+  /// Örn: [1] = Her Pazartesi, [1,4] = Pazartesi+Perşembe.
+  /// Boş liste = takvim ayarlanmamış (eski turlarla uyum).
+   List<int> departureDays;
+   String departureTime;
+   DateTime? departureDate;
+
+  /// Özel çıkış tarihleri listesi. Bu tarihler turun altında slot olarak kullanılır.
+   List<DateTime>? departureDates;
+
+  /// Aynı turun farklı tarihlere ait instance'larını gruplamak için.
+  /// Aynı seriesId'ye sahip turlar UI'da tek kart olarak gösterilir.
+   String? seriesId;
+
+
+   String driverName;
+   String phoneNumber;
+   String plate;
+   int capacity;
+
+
+
+
+   String id;
+
+  /// Günün başlığı ("1. Gün: İstanbul").
+   String title;
+
+  /// Program gün numarası (1-bazlı).
+   int day;
+
+  /// Listede gösterilecek sıra (düşük = önce).
+   int order;
+
+  /// O gün yapılacak aktivitelerin listesi.
+   List<String> activities;
+
+
+
+
+
+
+users collection'ı :
+  /// Firebase Auth veya guides koleksiyonundaki belge ID'si.
+   String uid;
+
+  /// Ad + soyad.
+   String fullName;
+
+   String email;
+   String phone;
+
+  /// Kullanıcı rolü: 'customer' | 'guide' | 'admin' | 'super_admin'.
+   String role;
+
+  /// Kullanıcının bağlı olduğu şirketin ID'si (guide ve admin için).
+   String companyId;
+
+  /// Kullanıcının erişim yetkisi olan şirket ID listesi.
+   List<String> registeredCompanies;
+
+   String tcNo;
+
+  /// Profil fotoğrafı URL'si (opsiyonel).
+   String? profileImage;
+
+  /// Kullanıcının son seçtiği çıkış şehri.
+   String selectedCity;
+
+  /// Soft-delete bayrağı; true ise kullanıcı silinmiş kabul edilir.
+   bool isDeleted;
+
+   DateTime createdAt;
