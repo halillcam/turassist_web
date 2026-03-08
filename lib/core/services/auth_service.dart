@@ -52,6 +52,10 @@ class AuthService {
 
   Future<void> signOut() => _auth.signOut();
 
+  static Future<void> sendPasswordReset(String email) {
+    return FirebaseAuth.instance.sendPasswordResetEmail(email: email.trim());
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // Statik yardımcı — mevcut oturumu bozmadan yeni Auth kullanıcısı oluşturur.
   // ──────────────────────────────────────────────────────────────────────────

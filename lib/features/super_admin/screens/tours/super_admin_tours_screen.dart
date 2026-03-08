@@ -197,6 +197,8 @@ class _TourCard extends StatelessWidget {
                       '${tour.city} • ${tour.region}',
                       style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     ),
+                    const SizedBox(height: 6),
+                    _statusChip(tour.isDeleted),
                   ],
                 ),
               ),
@@ -238,6 +240,22 @@ class _TourCard extends StatelessWidget {
       height: 60,
       decoration: BoxDecoration(color: AppColors.slate100, borderRadius: BorderRadius.circular(8)),
       child: const Icon(Icons.image, color: AppColors.slate400),
+    );
+  }
+
+  static Widget _statusChip(bool isDeleted) {
+    final color = isDeleted ? AppColors.error : AppColors.success;
+    final label = isDeleted ? 'Pasif' : 'Aktif';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withAlpha(25),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }

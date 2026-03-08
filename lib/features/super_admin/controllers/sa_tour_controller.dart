@@ -80,4 +80,19 @@ class SATourController extends GetxController {
       isLoading.value = false;
     }
   }
+
+  Future<void> toggleTourActive(TourModel tour) async {
+    if (tour.id == null) return;
+    isLoading.value = true;
+    try {
+      final willBeActive = tour.isDeleted; // currently passive → make active
+      await _service.setTourActive(tour.id!, isActive: willBeActive);
+      final msg = willBeActive ? 'Tur aktif yapıldı.' : 'Tur pasif yapıldı.';
+      Get.snackbar('Başarılı', msg, snackPosition: SnackPosition.BOTTOM);
+    } catch (e) {
+      Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      isLoading.value = false;
+    }
+  }
 }

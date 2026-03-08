@@ -26,8 +26,8 @@ class NotificationModel {
       body: map['body'] ?? '',
       targetCompanyId: map['targetCompanyId'],
       senderRole: map['senderRole'] ?? '',
-      isRead: map['isRead'] ?? false,
-      createdAt: map['createdAt'],
+      isRead: map['isRead'] == true,
+      createdAt: map['createdAt'] is Timestamp ? map['createdAt'] as Timestamp : null,
     );
   }
 

@@ -26,8 +26,8 @@ class TourCompletionRequestModel {
       tourTitle: map['tourTitle'] ?? '',
       guideId: map['guideId'] ?? '',
       companyId: map['companyId'] ?? '',
-      isApproved: map['isApproved'] ?? false,
-      requestedAt: map['requestedAt'],
+      isApproved: map['isApproved'] == true,
+      requestedAt: map['requestedAt'] is Timestamp ? map['requestedAt'] as Timestamp : null,
     );
   }
 

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/tour_model.dart';
+import '../../../../core/models/user_model.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
 import '../../controllers/sa_tour_controller.dart';
 import '../../services/super_admin_service.dart';
@@ -62,6 +64,8 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
                 const SizedBox(height: 24),
                 _buildInfoCard(tour),
                 const SizedBox(height: 16),
+                _buildGuideCard(tour),
+                const SizedBox(height: 16),
                 _buildBusInfoCard(tour),
                 const SizedBox(height: 16),
                 _buildDepartureCard(tour),
@@ -100,20 +104,29 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
           ),
         ),
         _actionButton(
-          AppStrings.addGuide,
+          tour.guideId.isEmpty ? AppStrings.addGuide : AppStrings.editGuide,
           Icons.admin_panel_settings,
           AppColors.warning,
-          () => Navigator.pushNamed(
-            context,
-            AppRoutes.saAddGuide,
-            arguments: {'tourId': tour.id ?? '', 'companyId': tour.companyId},
-          ),
+          () => tour.guideId.isEmpty
+              ? Navigator.pushNamed(
+                  context,
+                  AppRoutes.saAddGuide,
+                  arguments: {'tourId': tour.id ?? '', 'companyId': tour.companyId},
+                )
+              : _showGuideEditor(tour),
         ),
         _actionButton(
           AppStrings.updateTour,
           Icons.edit,
           AppColors.primaryLight,
           () => Navigator.pushNamed(context, AppRoutes.saUpdateTour, arguments: tour.id),
+        ),
+        // Aktif / Pasif toggle
+        _actionButton(
+          tour.isDeleted ? AppStrings.active : AppStrings.passive,
+          tour.isDeleted ? Icons.check_circle_outline : Icons.pause_circle_outline,
+          tour.isDeleted ? AppColors.success : AppColors.warning,
+          () => _confirmToggleActive(tour),
         ),
         _actionButton(AppStrings.delete, Icons.delete, AppColors.error, () => _confirmDelete(tour)),
       ],
@@ -130,6 +143,27 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  void _confirmToggleActive(TourModel tour) {
+    final willBeActive = tour.isDeleted;
+    final actionLabel = willBeActive ? 'Aktif Yap' : 'Pasif Yap';
+    showDialog(
+      context: context,
+      builder: (_) => ConfirmationDialog(
+        title: actionLabel,
+        message: '"${tour.title}" turunu $actionLabel işlemini onaylıyor musunuz?',
+        confirmText: actionLabel,
+        onConfirm: () async {
+          try {
+            final controller = Get.find<SATourController>();
+            await controller.toggleTourActive(tour);
+          } catch (e) {
+            Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
+          }
+        },
       ),
     );
   }
@@ -173,7 +207,7 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
                 _infoItem('Şehir', tour.city),
                 _infoItem('Bölge', tour.region),
                 _infoItem('Rehber', tour.guideName ?? '-'),
-                _infoItem('Durum', tour.isDeleted ? 'Pasif' : 'Aktif'),
+                _statusBadge(!tour.isDeleted),
               ],
             ),
             if (tour.description.isNotEmpty) ...[
@@ -212,6 +246,71 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildGuideCard(TourModel tour) {
+    return FutureBuilder<UserModel?>(
+      future: tour.guideId.isEmpty ? Future.value(null) : _service.getUserByUid(tour.guideId),
+      builder: (context, snapshot) {
+        final guide = snapshot.data;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _sectionTitle(AppStrings.guideManagement),
+                    const Spacer(),
+                    if (guide != null) _statusBadge(!guide.isDeleted),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (guide == null)
+                  const Text(
+                    'Bu tura henüz rehber atanmadı.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  )
+                else ...[
+                  Wrap(
+                    spacing: 32,
+                    runSpacing: 12,
+                    children: [
+                      _infoItem('Ad Soyad', guide.fullName),
+                      _infoItem('Telefon', guide.phone.isEmpty ? '-' : guide.phone),
+                      _infoItem('E-posta', guide.email),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => _showGuideEditor(tour, guide: guide),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text(AppStrings.editGuide),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _toggleGuideActive(guide),
+                        icon: Icon(guide.isDeleted ? Icons.visibility : Icons.visibility_off),
+                        label: Text(guide.isDeleted ? AppStrings.activate : AppStrings.deactivate),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _sendGuidePasswordReset(guide),
+                        icon: const Icon(Icons.lock_reset),
+                        label: const Text(AppStrings.sendPasswordReset),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -289,6 +388,132 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
       ),
+    );
+  }
+
+  Future<void> _toggleGuideActive(UserModel guide) async {
+    try {
+      await _service.setGuideActive(guide.uid!, isActive: guide.isDeleted);
+      Get.snackbar(
+        'Başarılı',
+        guide.isDeleted ? 'Rehber aktifleştirildi.' : 'Rehber pasife alındı.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
+    }
+  }
+
+  Future<void> _sendGuidePasswordReset(UserModel guide) async {
+    try {
+      await _service.sendPasswordResetEmail(guide.email);
+      Get.snackbar(
+        'Başarılı',
+        'Şifre sıfırlama maili ${guide.email} adresine gönderildi.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } on FirebaseAuthException catch (e) {
+      Get.snackbar('Hata', e.message ?? e.code, snackPosition: SnackPosition.BOTTOM);
+    } catch (e) {
+      Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
+    }
+  }
+
+  Future<void> _showGuideEditor(TourModel tour, {UserModel? guide}) {
+    final fullNameCtrl = TextEditingController(text: guide?.fullName ?? tour.guideName ?? '');
+    final phoneCtrl = TextEditingController(text: guide?.phone ?? '');
+
+    return showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text(AppStrings.editGuide),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: fullNameCtrl,
+                decoration: const InputDecoration(labelText: 'Ad Soyad'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneCtrl,
+                decoration: const InputDecoration(labelText: 'Telefon'),
+              ),
+              if (guide != null) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: TextEditingController(text: guide.email),
+                  enabled: false,
+                  decoration: const InputDecoration(labelText: 'Giriş E-postası'),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text(AppStrings.cancel)),
+          FilledButton(
+            onPressed: guide == null
+                ? () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(
+                      context,
+                      AppRoutes.saAddGuide,
+                      arguments: {'tourId': tour.id ?? '', 'companyId': tour.companyId},
+                    );
+                  }
+                : () async {
+                    await _service.updateGuide(guide.uid!, {
+                      'fullName': fullNameCtrl.text.trim(),
+                      'phone': phoneCtrl.text.trim(),
+                    });
+                    await _service.updateTour(tour.id!, {'guideName': fullNameCtrl.text.trim()});
+                    if (mounted) {
+                      Navigator.pop(context);
+                      setState(() {});
+                    }
+                  },
+            child: Text(guide == null ? AppStrings.addGuide : AppStrings.save),
+          ),
+        ],
+      ),
+    ).whenComplete(() {
+      fullNameCtrl.dispose();
+      phoneCtrl.dispose();
+    });
+  }
+
+  Widget _statusBadge(bool isActive) {
+    final color = isActive ? AppColors.success : AppColors.error;
+    final label = isActive ? 'Aktif' : 'Pasif';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Durum',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withAlpha(25),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
     );
   }
 

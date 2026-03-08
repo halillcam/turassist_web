@@ -14,6 +14,7 @@ import '../../features/super_admin/screens/tours/sa_update_tour_screen.dart';
 import '../../features/super_admin/screens/participants/sa_add_participant_screen.dart';
 import '../../features/super_admin/screens/participants/sa_participants_list_screen.dart';
 import '../../features/super_admin/screens/guide/sa_add_guide_screen.dart';
+import '../../features/super_admin/screens/users/sa_add_user_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -33,6 +34,7 @@ class AppRoutes {
   static const String saAddParticipant = '/super-admin/add-participant';
   static const String saParticipantsList = '/super-admin/participants';
   static const String saAddGuide = '/super-admin/add-guide';
+  static const String saAddUser = '/super-admin/add-user';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -97,6 +99,9 @@ class AppRoutes {
         return MaterialPageRoute(
           builder: (_) => SaAddGuideScreen(tourId: args['tourId']!, companyId: args['companyId']!),
         );
+
+      case saAddUser:
+        return MaterialPageRoute(builder: (_) => const SaAddUserScreen());
 
       default:
         return MaterialPageRoute(builder: (_) => const LoginScreen());

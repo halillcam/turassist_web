@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:get/get.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/models/company_model.dart';
 import '../../../core/models/feedback_model.dart';
 import '../../../core/models/user_model.dart';
@@ -62,5 +63,23 @@ class SAFeedbackController extends GetxController {
     final company = companyCache[companyId];
     if (company == null) return '-';
     return adminCache[company.adminUid]?.phone ?? '-';
+  }
+
+  List<FeedbackModel> get pendingFeedbacks {
+    return feedbacks.where((feedback) => !feedback.isResolved).toList();
+  }
+
+  List<FeedbackModel> get resolvedFeedbacks {
+    return feedbacks.where((feedback) => feedback.isResolved).toList();
+  }
+
+  Future<void> setResolved(FeedbackModel feedback, {required bool isResolved}) async {
+    final currentUser = await AuthService().getCurrentUserModel();
+    final resolvedBy = currentUser?.fullName ?? 'Super Admin';
+    await _service.setFeedbackResolved(
+      feedbackId: feedback.id!,
+      isResolved: isResolved,
+      resolvedBy: resolvedBy,
+    );
   }
 }

@@ -19,6 +19,11 @@ abstract class AppColors {
   // ─── Yüzey / Kart ───
   static const Color darkSurface = Color(0xFF162231);
   static const Color cardDark = Color(0xFF1a2632);
+  static const Color surfaceLight = Color(0xFFfbfdff);
+  static const Color surfaceMuted = Color(0xFFeef4fb);
+  static const Color borderSubtle = Color(0xFF253548);
+  static const Color surfaceInputDark = Color(0xFF223247);
+  static const Color surfaceOverlayDark = Color(0xFF203044);
 
   // ─── Slate Paleti ───
   static const Color slate900 = Color(0xFF0f172a);
@@ -55,13 +60,13 @@ abstract class AppColors {
   );
 
   // ─── Geriye Uyumluluk (eski isimlendirmeler) ───
-  static const Color background = backgroundLight;
-  static const Color surface = white;
-  static const Color textPrimary = slate900;
-  static const Color textSecondary = slate500;
-  static const Color divider = slate300;
+  static const Color background = backgroundDark;
+  static const Color surface = darkSurface;
+  static const Color textPrimary = slate100;
+  static const Color textSecondary = slate300;
+  static const Color divider = borderSubtle;
   static const Color accent = warning;
   static const Color sidebarBg = slate900;
-  static const Color sidebarText = slate400;
-  static const Color sidebarActive = primary;
+  static const Color sidebarText = slate300;
+  static const Color sidebarActive = primaryLight;
 }

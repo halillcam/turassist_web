@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/tour_model.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_tour_controller.dart';
 
 class AddTourScreen extends StatefulWidget {
   final String companyId;
@@ -15,7 +16,7 @@ class AddTourScreen extends StatefulWidget {
 }
 
 class _AddTourScreenState extends State<AddTourScreen> {
-  final _service = AdminTourService();
+  late final AdminTourController _controller;
   final _formKey = GlobalKey<FormState>();
 
   // Temel Bilgiler
@@ -66,6 +67,12 @@ class _AddTourScreenState extends State<AddTourScreen> {
     6: 'Cmt',
     7: 'Paz',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = Get.find<AdminTourController>();
+  }
 
   @override
   void dispose() {
@@ -199,7 +206,7 @@ class _AddTourScreenState extends State<AddTourScreen> {
         seriesId: 'series_${DateTime.now().microsecondsSinceEpoch}',
       );
 
-      await _service.addTour(tour);
+      await _controller.addTour(tour);
       if (!mounted) return;
       _showSnackBar('Tur başarıyla eklendi.');
       _clearForm();

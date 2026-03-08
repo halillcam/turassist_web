@@ -1,0 +1,216 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Kimlik ve kullanıcı bağlamı ───────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasUserDoc() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function currentRole() {
+      return hasUserDoc() ? currentUser().role : '';
+    }
+
+    function currentCompanyId() {
+      return hasUserDoc() ? currentUser().companyId : '';
+    }
+
+    function currentRegisteredCompanies() {
+      return hasUserDoc() && currentUser().registeredCompanies != null
+        ? currentUser().registeredCompanies
+        : [];
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isSuperAdmin() {
+      return currentRole() == 'super_admin';
+    }
+
+    function isAdmin() {
+      return currentRole() == 'admin';
+    }
+
+    function isGuide() {
+      return currentRole() == 'guide';
+    }
+
+    function belongsToCurrentCompany(companyId) {
+      return isSignedIn() && currentCompanyId() == companyId;
+    }
+
+    function canViewCompany(companyId) {
+      return isSuperAdmin() ||
+        belongsToCurrentCompany(companyId) ||
+        companyId in currentRegisteredCompanies();
+    }
+
+    function tourDoc(tourId) {
+      return get(/databases/$(database)/documents/tours/$(tourId)).data;
+    }
+
+    function hasTour(tourId) {
+      return exists(/databases/$(database)/documents/tours/$(tourId));
+    }
+
+    function canManageCompany(companyId) {
+      return isSuperAdmin() || (isAdmin() && belongsToCurrentCompany(companyId));
+    }
+
+    function isGuideForTour(tourId) {
+      return isGuide() && hasTour(tourId) && tourDoc(tourId).guideId == request.auth.uid;
+    }
+
+    function preservesOwnUserSecurityFields() {
+      return request.resource.data.role == resource.data.role &&
+        request.resource.data.companyId == resource.data.companyId &&
+        request.resource.data.registeredCompanies == resource.data.registeredCompanies &&
+        request.resource.data.isDeleted == resource.data.isDeleted &&
+        request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function guideOwnsTourRequest(tourId, companyId) {
+      return isGuideForTour(tourId) && tourDoc(tourId).companyId == companyId;
+    }
+
+    // ─── Şirketler ─────────────────────────────────────────────────────────
+    match /companies/{companyId} {
+      allow read: if canViewCompany(companyId);
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // ─── Kullanıcılar ──────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if isSuperAdmin() ||
+        isSelf(userId) ||
+        (isAdmin() && resource.data.companyId == currentCompanyId());
+
+      allow create: if isSuperAdmin() ||
+        (isAdmin() &&
+          request.resource.data.companyId == currentCompanyId() &&
+          request.resource.data.role in ['guide', 'customer'] &&
+          request.resource.data.isDeleted == false);
+
+      allow update: if isSuperAdmin() ||
+        (isSelf(userId) && preservesOwnUserSecurityFields()) ||
+        (isAdmin() &&
+          resource.data.companyId == currentCompanyId() &&
+          request.resource.data.companyId == resource.data.companyId &&
+          request.resource.data.role == resource.data.role &&
+          resource.data.role != 'super_admin');
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // ─── Turlar ────────────────────────────────────────────────────────────
+    match /tours/{tourId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSuperAdmin() ||
+        (isAdmin() && request.resource.data.companyId == currentCompanyId());
+
+      allow update, delete: if isSuperAdmin() ||
+        (isAdmin() &&
+          resource.data.companyId == currentCompanyId() &&
+          request.resource.data.companyId == resource.data.companyId);
+    }
+
+    // ─── Biletler ──────────────────────────────────────────────────────────
+    match /tickets/{ticketId} {
+      allow read: if isSuperAdmin() ||
+        (isAdmin() && resource.data.companyId == currentCompanyId()) ||
+        isSelf(resource.data.userId) ||
+        isGuideForTour(resource.data.tourId);
+
+      allow create: if isSuperAdmin() ||
+        (isAdmin() &&
+          request.resource.data.companyId == currentCompanyId() &&
+          hasTour(request.resource.data.tourId) &&
+          tourDoc(request.resource.data.tourId).companyId == currentCompanyId());
+
+      allow update: if isSuperAdmin() ||
+        (isAdmin() &&
+          resource.data.companyId == currentCompanyId() &&
+          request.resource.data.companyId == resource.data.companyId &&
+          request.resource.data.tourId == resource.data.tourId &&
+          request.resource.data.userId == resource.data.userId) ||
+        (isGuideForTour(resource.data.tourId) &&
+          request.resource.data.companyId == resource.data.companyId &&
+          request.resource.data.tourId == resource.data.tourId &&
+          request.resource.data.userId == resource.data.userId);
+
+      allow delete: if isSuperAdmin() ||
+        (isAdmin() && resource.data.companyId == currentCompanyId());
+    }
+
+    // ─── Bildirimler ───────────────────────────────────────────────────────
+    match /notifications/{notifId} {
+      allow read: if isSuperAdmin() || canViewCompany(resource.data.targetCompanyId);
+
+      allow create: if isSuperAdmin() &&
+        request.resource.data.senderRole == 'super_admin';
+
+      allow update: if isSuperAdmin() ||
+        (canViewCompany(resource.data.targetCompanyId) &&
+          request.resource.data.targetCompanyId == resource.data.targetCompanyId &&
+          request.resource.data.senderRole == resource.data.senderRole &&
+          request.resource.data.title == resource.data.title &&
+          request.resource.data.body == resource.data.body &&
+          request.resource.data.createdAt == resource.data.createdAt);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // ─── Geri Bildirimler ──────────────────────────────────────────────────
+    match /feedbacks/{feedbackId} {
+      allow read: if isSuperAdmin() ||
+        (isAdmin() && resource.data.companyId == currentCompanyId());
+
+      allow create: if isAdmin() &&
+        request.resource.data.companyId == currentCompanyId();
+
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // ─── Tur Bitirme İstekleri ─────────────────────────────────────────────
+    match /tour_completion_requests/{reqId} {
+      allow read: if isSuperAdmin() ||
+        (isAdmin() && resource.data.companyId == currentCompanyId()) ||
+        isSelf(resource.data.guideId);
+
+      allow create: if isGuide() &&
+        request.resource.data.guideId == request.auth.uid &&
+        guideOwnsTourRequest(
+          request.resource.data.tourId,
+          request.resource.data.companyId,
+        );
+
+      allow update: if isSuperAdmin() ||
+        (isAdmin() &&
+          resource.data.companyId == currentCompanyId() &&
+          request.resource.data.companyId == resource.data.companyId &&
+          request.resource.data.tourId == resource.data.tourId &&
+          request.resource.data.guideId == resource.data.guideId);
+
+      allow delete: if isSuperAdmin() ||
+        (isAdmin() && resource.data.companyId == currentCompanyId());
+    }
+
+    // ─── Super Admin: tam erişim ───────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}

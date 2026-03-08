@@ -36,10 +36,11 @@ class AdminTourService {
     return _firestore
         .collection('tours')
         .where('companyId', isEqualTo: companyId)
-        .where('isDeleted', isEqualTo: false)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(_toTourList);
+        .map(
+          (snap) => _toTourList(snap).where((tour) => !tour.isDeleted).toList()
+            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0))),
+        );
   }
 
   /// Pasif (silinmiş) turların gerçek zamanlı akışı.
@@ -47,10 +48,11 @@ class AdminTourService {
     return _firestore
         .collection('tours')
         .where('companyId', isEqualTo: companyId)
-        .where('isDeleted', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(_toTourList);
+        .map(
+          (snap) => _toTourList(snap).where((tour) => tour.isDeleted).toList()
+            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0))),
+        );
   }
 
   /// Yeni tur ekler; dönen değer oluşturulan dokümanın ID'sidir.
@@ -67,6 +69,10 @@ class AdminTourService {
   /// Soft-delete: `isDeleted = true` yapılır, veri kaybolmaz.
   Future<void> deleteTour(String tourId) {
     return _firestore.collection('tours').doc(tourId).update({'isDeleted': true});
+  }
+
+  Future<void> setTourActive(String tourId, {required bool isActive}) {
+    return _firestore.collection('tours').doc(tourId).update({'isDeleted': !isActive});
   }
 
   /// Tek tur getirir; bulunamazsa null döner.
@@ -187,6 +193,24 @@ class AdminTourService {
     await batch.commit();
   }
 
+  Future<UserModel?> getUserByUid(String uid) async {
+    final doc = await _firestore.collection('users').doc(uid).get();
+    if (!doc.exists || doc.data() == null) return null;
+    return UserModel.fromMap(doc.data()!, doc.id);
+  }
+
+  Future<void> updateGuide(String guideId, Map<String, dynamic> data) {
+    return _firestore.collection('users').doc(guideId).update(data);
+  }
+
+  Future<void> setGuideActive(String guideId, {required bool isActive}) {
+    return _firestore.collection('users').doc(guideId).update({'isDeleted': !isActive});
+  }
+
+  Future<void> sendPasswordResetEmail(String email) {
+    return AuthService.sendPasswordReset(email);
+  }
+
   /// Mevcut rehberi pasife alır ve tur'daki bağlantısını temizler.
   Future<void> removeGuideFromTour({required String tourId, required String guideId}) async {
     final batch = _firestore.batch();
@@ -207,14 +231,19 @@ class AdminTourService {
     return _firestore
         .collection('tour_completion_requests')
         .where('companyId', isEqualTo: companyId)
-        .where('isApproved', isEqualTo: false)
-        .orderBy('requestedAt', descending: true)
         .snapshots()
-        .map(
-          (snap) => snap.docs
+        .map((snap) {
+          final requests = snap.docs
               .map((doc) => TourCompletionRequestModel.fromMap(doc.data(), doc.id))
-              .toList(),
-        );
+              .where((request) => !request.isApproved)
+              .toList();
+          requests.sort(
+            (a, b) => (b.requestedAt?.toDate() ?? DateTime(0)).compareTo(
+              a.requestedAt?.toDate() ?? DateTime(0),
+            ),
+          );
+          return requests;
+        });
   }
 
   /// Tur bitişini onaylar.
@@ -262,11 +291,18 @@ class AdminTourService {
     return _firestore
         .collection('notifications')
         .where('targetCompanyId', isEqualTo: companyId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(
-          (snap) => snap.docs.map((doc) => NotificationModel.fromMap(doc.data(), doc.id)).toList(),
-        );
+        .map((snap) {
+          final notifications = snap.docs
+              .map((doc) => NotificationModel.fromMap(doc.data(), doc.id))
+              .toList();
+          notifications.sort(
+            (a, b) => (b.createdAt?.toDate() ?? DateTime(0)).compareTo(
+              a.createdAt?.toDate() ?? DateTime(0),
+            ),
+          );
+          return notifications;
+        });
   }
 
   /// Okunmamış bildirim sayısının gerçek zamanlı akışı.
@@ -274,9 +310,13 @@ class AdminTourService {
     return _firestore
         .collection('notifications')
         .where('targetCompanyId', isEqualTo: companyId)
-        .where('isRead', isEqualTo: false)
         .snapshots()
-        .map((snap) => snap.size);
+        .map(
+          (snap) => snap.docs
+              .map((doc) => NotificationModel.fromMap(doc.data(), doc.id))
+              .where((notification) => !notification.isRead)
+              .length,
+        );
   }
 
   /// Bildirimi okundu olarak işaretler.
@@ -291,15 +331,16 @@ class AdminTourService {
     final snap = await _firestore
         .collection('notifications')
         .where('targetCompanyId', isEqualTo: companyId)
-        .where('isRead', isEqualTo: false)
         .get();
 
-    if (snap.docs.isEmpty) return;
+    final unreadDocs = snap.docs.where((doc) => doc.data()['isRead'] != true).toList();
+
+    if (unreadDocs.isEmpty) return;
 
     const chunkSize = 400;
-    for (var i = 0; i < snap.docs.length; i += chunkSize) {
+    for (var i = 0; i < unreadDocs.length; i += chunkSize) {
       final batch = _firestore.batch();
-      for (final doc in snap.docs.skip(i).take(chunkSize)) {
+      for (final doc in unreadDocs.skip(i).take(chunkSize)) {
         batch.update(doc.reference, {'isRead': true});
       }
       await batch.commit();

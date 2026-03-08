@@ -43,4 +43,25 @@ class AppStrings {
   static const String updateCompany = 'Şirket Güncelle';
   static const String userList = 'Kullanıcı Listesi';
   static const String sendNotification = 'Bildirim Gönder';
+  static const String notificationTargetCompany = 'Hedef Şirket';
+  static const String notificationTitle = 'Bildirim Başlığı';
+  static const String notificationBody = 'Bildirim İçeriği';
+  static const String sendNotificationDescription =
+      'Belirli şirkete veya tüm aktif şirketlere bildirim gönderin.';
+  static const String allActiveCompanies = 'Tüm Aktif Şirketler';
+  static const String sendingNotification = 'Gönderiliyor...';
+  static const String sentNotificationsTitle = 'Gönderilen Bildirimler';
+  static const String noNotificationsYet = 'Henüz bildirim gönderilmedi.';
+  static const String pendingFeedback = 'Bekleyen Geri Bildirimler';
+  static const String resolvedFeedback = 'Çözülen Geri Bildirimler';
+  static const String markResolved = 'Sorun Çözüldü';
+  static const String reopenFeedback = 'Tekrar Aç';
+  static const String feedbackResolved = 'Çözüldü';
+  static const String feedbackPending = 'Bekliyor';
+  static const String editUser = 'Kullanıcıyı Düzenle';
+  static const String editGuide = 'Rehberi Düzenle';
+  static const String guideManagement = 'Rehber Yönetimi';
+  static const String deactivate = 'Pasife Al';
+  static const String activate = 'Aktif Yap';
+  static const String sendPasswordReset = 'Şifre Sıfırlama Maili Gönder';
 }

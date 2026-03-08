@@ -1,1 +1,46 @@
-{"hosting":{"site":"turassist","public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}]},"database":{"rules":"database.rules.json"},"flutter":{"platforms":{"android":{"default":{"projectId":"turassist-6fdc8","appId":"1:138121353976:android:bbb00948ed3c586e8f790d","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"turassist-6fdc8","configurations":{"android":"1:138121353976:android:bbb00948ed3c586e8f790d","ios":"1:138121353976:ios:e67bf5b8b7f93c538f790d","macos":"1:138121353976:ios:e67bf5b8b7f93c538f790d","web":"1:138121353976:web:4b1ae803577a3c658f790d","windows":"1:138121353976:web:aefc166a8def6cf68f790d"}}}}}}
+{
+   "hosting": {
+      "site": "turassist",
+      "public": "build/web",
+      "ignore": [
+         "firebase.json",
+         "**/.*",
+         "**/node_modules/**"
+      ],
+      "rewrites": [
+         {
+            "source": "**",
+            "destination": "/index.html"
+         }
+      ]
+   },
+   "database": {
+      "rules": "database.rules.json"
+   },
+   "firestore": {
+      "rules": "firestore.rules"
+   },
+   "flutter": {
+      "platforms": {
+         "android": {
+            "default": {
+               "projectId": "turassist-6fdc8",
+               "appId": "1:138121353976:android:bbb00948ed3c586e8f790d",
+               "fileOutput": "android/app/google-services.json"
+            }
+         },
+         "dart": {
+            "lib/firebase_options.dart": {
+               "projectId": "turassist-6fdc8",
+               "configurations": {
+                  "android": "1:138121353976:android:bbb00948ed3c586e8f790d",
+                  "ios": "1:138121353976:ios:e67bf5b8b7f93c538f790d",
+                  "macos": "1:138121353976:ios:e67bf5b8b7f93c538f790d",
+                  "web": "1:138121353976:web:4b1ae803577a3c658f790d",
+                  "windows": "1:138121353976:web:aefc166a8def6cf68f790d"
+               }
+            }
+         }
+      }
+   }
+}

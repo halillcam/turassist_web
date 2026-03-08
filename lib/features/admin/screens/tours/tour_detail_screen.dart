@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/models/tour_model.dart';
+import '../../../../core/models/user_model.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_tour_controller.dart';
 
 class TourDetailScreen extends StatefulWidget {
   final String tourId;
@@ -17,7 +20,7 @@ class TourDetailScreen extends StatefulWidget {
 }
 
 class _TourDetailScreenState extends State<TourDetailScreen> {
-  final _service = AdminTourService();
+  late final AdminTourController _controller;
 
   static const _dayLabels = {
     1: 'Pazartesi',
@@ -30,6 +33,12 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
   };
 
   @override
+  void initState() {
+    super.initState();
+    _controller = Get.find<AdminTourController>();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -40,7 +49,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
         ),
       ),
       body: StreamBuilder<TourModel?>(
-        stream: _service.streamTour(widget.tourId),
+        stream: _controller.streamTour(widget.tourId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -57,6 +66,8 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                 _buildActionButtons(tour),
                 const SizedBox(height: 24),
                 _buildInfoCard(tour),
+                const SizedBox(height: 16),
+                _buildGuideCard(tour),
                 const SizedBox(height: 16),
                 _buildBusInfoCard(tour),
                 const SizedBox(height: 16),
@@ -92,16 +103,24 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
           () => Navigator.pushNamed(context, AppRoutes.addParticipant, arguments: tour.id),
         ),
         _actionButton(
-          AppStrings.addGuide,
+          tour.guideId.isEmpty ? AppStrings.addGuide : AppStrings.editGuide,
           Icons.admin_panel_settings,
           AppColors.warning,
-          () => Navigator.pushNamed(context, AppRoutes.addGuide, arguments: tour.id),
+          () => tour.guideId.isEmpty
+              ? Navigator.pushNamed(context, AppRoutes.addGuide, arguments: tour.id)
+              : _showGuideEditor(tour),
         ),
         _actionButton(
           AppStrings.updateTour,
           Icons.edit,
           AppColors.primaryLight,
           () => Navigator.pushNamed(context, AppRoutes.updateTour, arguments: tour.id),
+        ),
+        _actionButton(
+          tour.isDeleted ? AppStrings.active : AppStrings.passive,
+          tour.isDeleted ? Icons.check_circle_outline : Icons.pause_circle_outline,
+          tour.isDeleted ? AppColors.success : AppColors.warning,
+          () => _confirmToggleActive(tour),
         ),
         _actionButton(AppStrings.delete, Icons.delete, AppColors.error, () => _confirmDelete(tour)),
       ],
@@ -122,6 +141,23 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
     );
   }
 
+  void _confirmToggleActive(TourModel tour) {
+    final willBeActive = tour.isDeleted;
+    final actionLabel = willBeActive ? 'Aktif Yap' : 'Pasif Yap';
+    showDialog(
+      context: context,
+      builder: (_) => ConfirmationDialog(
+        title: actionLabel,
+        message: '"${tour.title}" turunu $actionLabel işlemini onaylıyor musunuz?',
+        confirmText: actionLabel,
+        onConfirm: () async {
+          await _controller.setTourActive(tour.id!, isActive: willBeActive);
+          if (mounted) Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
   void _confirmDelete(TourModel tour) {
     showDialog(
       context: context,
@@ -130,7 +166,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
         message: '"${tour.title}" turunu silmek istediğinize emin misiniz?',
         confirmText: 'Sil',
         onConfirm: () async {
-          await _service.deleteTour(tour.id!);
+          await _controller.deleteTour(tour.id!);
           if (mounted) Navigator.pop(context);
         },
       ),
@@ -156,7 +192,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                 _infoItem('Şehir', tour.city),
                 _infoItem('Bölge', tour.region),
                 _infoItem('Rehber', tour.guideName ?? '-'),
-                _infoItem('Durum', tour.isDeleted ? 'Pasif' : 'Aktif'),
+                _statusBadge(!tour.isDeleted),
               ],
             ),
             if (tour.description.isNotEmpty) ...[
@@ -170,6 +206,71 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildGuideCard(TourModel tour) {
+    return FutureBuilder<UserModel?>(
+      future: tour.guideId.isEmpty ? Future.value(null) : _controller.getUserByUid(tour.guideId),
+      builder: (context, snapshot) {
+        final guide = snapshot.data;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _sectionTitle(AppStrings.guideManagement),
+                    const Spacer(),
+                    if (guide != null) _statusBadge(!guide.isDeleted),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (guide == null)
+                  const Text(
+                    'Bu tura henüz rehber atanmadı.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  )
+                else ...[
+                  Wrap(
+                    spacing: 32,
+                    runSpacing: 12,
+                    children: [
+                      _infoItem('Ad Soyad', guide.fullName),
+                      _infoItem('Telefon', guide.phone.isEmpty ? '-' : guide.phone),
+                      _infoItem('E-posta', guide.email),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => _showGuideEditor(tour, guide: guide),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text(AppStrings.editGuide),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _toggleGuideActive(guide),
+                        icon: Icon(guide.isDeleted ? Icons.visibility : Icons.visibility_off),
+                        label: Text(guide.isDeleted ? AppStrings.activate : AppStrings.deactivate),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _sendGuidePasswordReset(guide),
+                        icon: const Icon(Icons.lock_reset),
+                        label: const Text(AppStrings.sendPasswordReset),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -272,6 +373,121 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
       ),
+    );
+  }
+
+  Future<void> _toggleGuideActive(UserModel guide) async {
+    await _controller.setGuideActive(guide.uid!, isActive: guide.isDeleted);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _sendGuidePasswordReset(UserModel guide) async {
+    try {
+      await _controller.sendPasswordResetEmail(guide.email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Şifre sıfırlama maili ${guide.email} adresine gönderildi.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? e.code), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  Future<void> _showGuideEditor(TourModel tour, {UserModel? guide}) {
+    final fullNameCtrl = TextEditingController(text: guide?.fullName ?? tour.guideName ?? '');
+    final phoneCtrl = TextEditingController(text: guide?.phone ?? '');
+
+    return showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text(AppStrings.editGuide),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: fullNameCtrl,
+                decoration: const InputDecoration(labelText: 'Ad Soyad'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneCtrl,
+                decoration: const InputDecoration(labelText: 'Telefon'),
+              ),
+              if (guide != null) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: TextEditingController(text: guide.email),
+                  enabled: false,
+                  decoration: const InputDecoration(labelText: 'Giriş E-postası'),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text(AppStrings.cancel)),
+          FilledButton(
+            onPressed: guide == null
+                ? () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, AppRoutes.addGuide, arguments: tour.id);
+                  }
+                : () async {
+                    await _controller.updateGuide(guide.uid!, {
+                      'fullName': fullNameCtrl.text.trim(),
+                      'phone': phoneCtrl.text.trim(),
+                    });
+                    await _controller.updateTour(tour.id!, {'guideName': fullNameCtrl.text.trim()});
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                    setState(() {});
+                  },
+            child: Text(guide == null ? AppStrings.addGuide : AppStrings.save),
+          ),
+        ],
+      ),
+    ).whenComplete(() {
+      fullNameCtrl.dispose();
+      phoneCtrl.dispose();
+    });
+  }
+
+  Widget _statusBadge(bool isActive) {
+    final color = isActive ? AppColors.success : AppColors.error;
+    final label = isActive ? AppStrings.active : AppStrings.passive;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Durum',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withAlpha(25),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
     );
   }
 

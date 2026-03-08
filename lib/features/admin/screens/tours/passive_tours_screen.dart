@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/models/tour_model.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_tour_controller.dart';
 
 class PassiveToursScreen extends StatefulWidget {
   final String companyId;
@@ -17,12 +18,13 @@ class PassiveToursScreen extends StatefulWidget {
 
 class _PassiveToursScreenState extends State<PassiveToursScreen>
     with SingleTickerProviderStateMixin {
-  final _service = AdminTourService();
+  late final AdminTourController _controller;
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _controller = Get.find<AdminTourController>();
     _tabController = TabController(length: 2, vsync: this);
   }
 
@@ -46,7 +48,7 @@ class _PassiveToursScreenState extends State<PassiveToursScreen>
         ),
       ),
       body: StreamBuilder<List<TourModel>>(
-        stream: _service.streamDeletedTours(widget.companyId),
+        stream: _controller.streamDeletedTours(widget.companyId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -119,10 +121,13 @@ class _PassiveToursScreenState extends State<PassiveToursScreen>
               '${tour.city} • ${tour.region} • $dateText',
               style: const TextStyle(color: AppColors.textSecondary),
             ),
+            isThreeLine: true,
             trailing: Text(
               '₺${tour.price.toStringAsFixed(0)}',
               style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
             ),
+            titleAlignment: ListTileTitleAlignment.top,
+            minVerticalPadding: 12,
             onTap: () => Navigator.pushNamed(context, AppRoutes.tourDetail, arguments: tour.id),
           ),
         );

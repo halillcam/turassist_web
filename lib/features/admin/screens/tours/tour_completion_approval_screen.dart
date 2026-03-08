@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/tour_completion_request_model.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_completion_controller.dart';
 
 class TourCompletionApprovalScreen extends StatefulWidget {
   final String companyId;
@@ -16,7 +17,13 @@ class TourCompletionApprovalScreen extends StatefulWidget {
 }
 
 class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScreen> {
-  final _service = AdminTourService();
+  late final AdminCompletionController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = Get.find<AdminCompletionController>();
+  }
 
   void _approve(TourCompletionRequestModel req) {
     showDialog(
@@ -27,7 +34,7 @@ class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScr
             'Bu turu bitirmek istediğinize emin misiniz?\nTur pasif hale geçecek ve rehber silinecektir.',
         onConfirm: () async {
           try {
-            await _service.approveTourCompletion(
+            await _controller.approveTourCompletion(
               requestId: req.id!,
               tourId: req.tourId,
               guideId: req.guideId,
@@ -58,7 +65,7 @@ class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScr
         message: 'Bu talebi reddetmek istediğinize emin misiniz?',
         onConfirm: () async {
           try {
-            await _service.rejectTourCompletion(req.id!);
+            await _controller.rejectTourCompletion(req.id!);
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -108,7 +115,7 @@ class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScr
             const SizedBox(height: 20),
             Expanded(
               child: StreamBuilder<List<TourCompletionRequestModel>>(
-                stream: _service.streamCompletionRequests(widget.companyId),
+                stream: _controller.streamCompletionRequests(widget.companyId),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return Center(child: Text('Hata: ${snapshot.error}'));

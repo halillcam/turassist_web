@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/notification_model.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_notification_controller.dart';
 
 class AdminNotificationsScreen extends StatefulWidget {
   final String companyId;
@@ -15,7 +16,13 @@ class AdminNotificationsScreen extends StatefulWidget {
 }
 
 class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
-  final _service = AdminTourService();
+  late final AdminNotificationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = Get.find<AdminNotificationController>();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +55,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
             const SizedBox(height: 20),
             Expanded(
               child: StreamBuilder<List<NotificationModel>>(
-                stream: _service.streamNotifications(widget.companyId),
+                stream: _controller.streamNotifications(widget.companyId),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return Center(child: Text('Hata: ${snapshot.error}'));
@@ -122,7 +129,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                 icon: const Icon(Icons.done_all, color: AppColors.primary),
                 onPressed: () {
                   if (n.id != null) {
-                    _service.markNotificationAsRead(n.id!);
+                    _controller.markNotificationAsRead(n.id!);
                   }
                 },
               )

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../../../core/models/feedback_model.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_feedback_controller.dart';
 
 class AdminFeedbackScreen extends StatefulWidget {
   final String companyId;
@@ -14,11 +14,16 @@ class AdminFeedbackScreen extends StatefulWidget {
 }
 
 class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
-  final _service = AdminTourService();
+  late final AdminFeedbackController _controller;
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
-  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = Get.find<AdminFeedbackController>();
+  }
 
   @override
   void dispose() {
@@ -29,17 +34,13 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
 
   Future<void> _handleSend() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
 
     try {
-      final feedback = FeedbackModel(
+      await _controller.sendFeedback(
         companyId: widget.companyId,
         title: _titleCtrl.text.trim(),
         description: _descriptionCtrl.text.trim(),
-        senderName: '',
-        senderPhone: '',
       );
-      await _service.sendFeedback(feedback);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -54,8 +55,6 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error));
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -115,26 +114,28 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: ElevatedButton.icon(
-                          onPressed: _isLoading ? null : _handleSend,
-                          icon: _isLoading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.send),
-                          label: Text(_isLoading ? 'Gönderiliyor...' : 'Gönder'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      Obx(
+                        () => Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton.icon(
+                            onPressed: _controller.isLoading.value ? null : _handleSend,
+                            icon: _controller.isLoading.value
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.send),
+                            label: Text(_controller.isLoading.value ? 'Gönderiliyor...' : 'Gönder'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
                           ),
                         ),
                       ),

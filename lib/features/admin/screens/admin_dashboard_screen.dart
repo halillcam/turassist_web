@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_routes.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/widgets/sidebar_menu.dart';
-import '../services/admin_tour_service.dart';
+import '../controllers/admin_completion_controller.dart';
+import '../controllers/admin_dashboard_controller.dart';
+import '../controllers/admin_feedback_controller.dart';
+import '../controllers/admin_notification_controller.dart';
+import '../controllers/admin_tour_controller.dart';
 import 'tours/active_tours_screen.dart';
 import 'tours/passive_tours_screen.dart';
 import 'tours/add_tour_screen.dart';
@@ -21,11 +26,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _authService = AuthService();
-  final _tourService = AdminTourService();
-
-  int _selectedIndex = 0;
-  String? _companyId;
-  bool _isLoading = true;
+  late final AdminDashboardController _dashboardController;
 
   static const _menuItems = [
     SidebarItem(icon: Icons.tour, label: AppStrings.activeTours),
@@ -39,16 +40,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCompanyId();
+    _dashboardController = Get.put(AdminDashboardController());
+    Get.put(AdminTourController());
+    Get.put(AdminNotificationController());
+    Get.put(AdminFeedbackController());
+    Get.put(AdminCompletionController());
   }
 
-  Future<void> _loadCompanyId() async {
-    final id = await _tourService.getCurrentCompanyId();
-    if (!mounted) return;
-    setState(() {
-      _companyId = id;
-      _isLoading = false;
-    });
+  @override
+  void dispose() {
+    Get.delete<AdminDashboardController>(force: true);
+    Get.delete<AdminTourController>(force: true);
+    Get.delete<AdminNotificationController>(force: true);
+    Get.delete<AdminFeedbackController>(force: true);
+    Get.delete<AdminCompletionController>(force: true);
+    super.dispose();
   }
 
   Future<void> _handleLogout() async {
@@ -57,15 +63,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     Navigator.pushReplacementNamed(context, AppRoutes.login);
   }
 
-  Widget _buildScreen() {
-    final companyId = _companyId;
+  Widget _buildScreen(String? companyId, int selectedIndex) {
     if (companyId == null) {
       return const Center(
         child: Text('Şirket bilgisi bulunamadı.', style: TextStyle(color: AppColors.textSecondary)),
       );
     }
 
-    switch (_selectedIndex) {
+    switch (selectedIndex) {
       case 0:
         return ActiveToursScreen(companyId: companyId);
       case 1:
@@ -86,19 +91,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
-        children: [
-          SidebarMenu(
-            title: 'Admin Panel',
-            items: _menuItems,
-            selectedIndex: _selectedIndex,
-            onItemSelected: (index) => setState(() => _selectedIndex = index),
-            onLogout: _handleLogout,
-          ),
-          Expanded(
-            child: _isLoading ? const Center(child: CircularProgressIndicator()) : _buildScreen(),
-          ),
-        ],
+      body: Obx(
+        () => Row(
+          children: [
+            SidebarMenu(
+              title: 'Admin Panel',
+              items: _menuItems,
+              selectedIndex: _dashboardController.selectedIndex.value,
+              onItemSelected: _dashboardController.setSelectedIndex,
+              onLogout: _handleLogout,
+            ),
+            Expanded(
+              child: _dashboardController.isLoading.value
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildScreen(
+                      _dashboardController.companyId.value,
+                      _dashboardController.selectedIndex.value,
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

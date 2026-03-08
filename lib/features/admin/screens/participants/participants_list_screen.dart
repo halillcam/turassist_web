@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/ticket_model.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_tour_controller.dart';
 
 class ParticipantsListScreen extends StatefulWidget {
   final String tourId;
@@ -15,7 +16,13 @@ class ParticipantsListScreen extends StatefulWidget {
 }
 
 class _ParticipantsListScreenState extends State<ParticipantsListScreen> {
-  final _service = AdminTourService();
+  late final AdminTourController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = Get.find<AdminTourController>();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +56,7 @@ class _ParticipantsListScreenState extends State<ParticipantsListScreen> {
             const SizedBox(height: 16),
             Expanded(
               child: StreamBuilder<List<TicketModel>>(
-                stream: _service.streamTourTickets(widget.tourId),
+                stream: _controller.streamTourTickets(widget.tourId),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return Center(child: Text('Hata: ${snapshot.error}'));

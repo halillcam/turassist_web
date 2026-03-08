@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_tour_controller.dart';
 
 class UpdateTourScreen extends StatefulWidget {
   final String tourId;
@@ -14,7 +15,7 @@ class UpdateTourScreen extends StatefulWidget {
 }
 
 class _UpdateTourScreenState extends State<UpdateTourScreen> {
-  final _service = AdminTourService();
+  late final AdminTourController _controller;
   final _formKey = GlobalKey<FormState>();
 
   final _titleCtrl = TextEditingController();
@@ -63,11 +64,12 @@ class _UpdateTourScreenState extends State<UpdateTourScreen> {
   @override
   void initState() {
     super.initState();
+    _controller = Get.find<AdminTourController>();
     _loadTourData();
   }
 
   Future<void> _loadTourData() async {
-    final tour = await _service.getTour(widget.tourId);
+    final tour = await _controller.getTour(widget.tourId);
     if (tour == null || !mounted) return;
 
     _titleCtrl.text = tour.title;
@@ -140,7 +142,7 @@ class _UpdateTourScreenState extends State<UpdateTourScreen> {
         },
       };
 
-      await _service.updateTour(widget.tourId, data);
+      await _controller.updateTour(widget.tourId, data);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

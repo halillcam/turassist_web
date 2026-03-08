@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/models/tour_model.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_tour_controller.dart';
 
 class ActiveToursScreen extends StatefulWidget {
   final String companyId;
@@ -16,7 +17,13 @@ class ActiveToursScreen extends StatefulWidget {
 }
 
 class _ActiveToursScreenState extends State<ActiveToursScreen> {
-  final _service = AdminTourService();
+  late final AdminTourController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = Get.find<AdminTourController>();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +51,7 @@ class _ActiveToursScreenState extends State<ActiveToursScreen> {
             const SizedBox(height: 16),
             Expanded(
               child: StreamBuilder<List<TourModel>>(
-                stream: _service.streamActiveTours(widget.companyId),
+                stream: _controller.streamActiveTours(widget.companyId),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
@@ -156,6 +163,8 @@ class _TourCard extends StatelessWidget {
                       '${tour.city} • ${tour.region}',
                       style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     ),
+                    const SizedBox(height: 6),
+                    _timeChip(tour.departureDate),
                   ],
                 ),
               ),
@@ -205,5 +214,28 @@ class _TourCard extends StatelessWidget {
 
   static String _departureDaysText(List<int> days) {
     return days.map((d) => _dayLabels[d] ?? '').join(', ');
+  }
+
+  static Widget _timeChip(DateTime? departureDate) {
+    if (departureDate == null) {
+      return _chip(AppColors.info, 'Takvimli');
+    }
+
+    final isPast = departureDate.isBefore(DateTime.now());
+    return _chip(isPast ? AppColors.warning : AppColors.success, isPast ? 'Geçmiş' : 'Gelecek');
+  }
+
+  static Widget _chip(Color color, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withAlpha(24),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),
+      ),
+    );
   }
 }

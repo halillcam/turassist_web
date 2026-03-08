@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../services/admin_tour_service.dart';
+import '../../controllers/admin_tour_controller.dart';
 
 class AddParticipantScreen extends StatefulWidget {
   final String tourId;
@@ -13,7 +14,7 @@ class AddParticipantScreen extends StatefulWidget {
 }
 
 class _AddParticipantScreenState extends State<AddParticipantScreen> {
-  final _service = AdminTourService();
+  late final AdminTourController _controller;
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -22,6 +23,12 @@ class _AddParticipantScreenState extends State<AddParticipantScreen> {
   final _tcNoCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = Get.find<AdminTourController>();
+  }
 
   @override
   void dispose() {
@@ -39,10 +46,10 @@ class _AddParticipantScreenState extends State<AddParticipantScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final companyId = await _service.getCurrentCompanyId();
+      final companyId = await _controller.getCurrentCompanyId();
       if (companyId == null) throw Exception('Şirket bilgisi alınamadı');
 
-      await _service.addParticipantToTour(
+      await _controller.addParticipantToTour(
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text.trim(),
         fullName: _fullNameCtrl.text.trim(),

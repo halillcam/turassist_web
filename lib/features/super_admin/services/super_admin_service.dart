@@ -128,9 +128,11 @@ class SuperAdminService {
   Stream<List<UserModel>> streamAllUsers() {
     return _firestore
         .collection('users')
-        .where('isDeleted', isEqualTo: false)
         .snapshots()
-        .map(_toUserList);
+        .map(
+          (snap) => _toUserList(snap)
+            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0))),
+        );
   }
 
   /// Belirli bir şirkete ait silinmemiş kullanıcıların gerçek zamanlı akışı.
@@ -155,27 +157,74 @@ class SuperAdminService {
     return _firestore.collection('users').doc(uid).update({'isDeleted': true});
   }
 
+  Future<void> setUserActive(String uid, {required bool isActive}) {
+    return _firestore.collection('users').doc(uid).update({'isDeleted': !isActive});
+  }
+
+  Future<void> updateUser(String uid, Map<String, dynamic> data) {
+    return _firestore.collection('users').doc(uid).update(data);
+  }
+
+  Future<void> sendPasswordResetEmail(String email) {
+    return AuthService.sendPasswordReset(email);
+  }
+
+  /// Standalone kullanıcı oluşturur — şirket, rol ve temel bilgilerle.
+  Future<void> addUser({
+    required String email,
+    required String password,
+    required String fullName,
+    required String phone,
+    required String role,
+    String companyId = '',
+    String tcNo = '',
+  }) async {
+    final uid = await _createAuthUser(email, password);
+    await _firestore
+        .collection('users')
+        .doc(uid)
+        .set(
+          UserModel(
+            uid: uid,
+            fullName: fullName,
+            email: email,
+            phone: phone,
+            role: role,
+            companyId: companyId,
+            tcNo: tcNo,
+            registeredCompanies: companyId.isNotEmpty ? [companyId] : [],
+          ).toMap(),
+        );
+  }
+
   // ━━━━━━━━━━━━━ Turlar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   /// Tüm şirketlerdeki aktif veya pasif turların gerçek zamanlı akışı.
+  ///
+  /// Birleşik index gerektiren `orderBy` kaldırıldı; sıralama client-side yapılır.
   Stream<List<TourModel>> streamAllTours({required bool isDeleted}) {
     return _firestore
         .collection('tours')
-        .where('isDeleted', isEqualTo: isDeleted)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(_toTourList);
+        .map(
+          (snap) => _toTourList(snap).where((t) => t.isDeleted == isDeleted).toList()
+            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0))),
+        );
   }
 
   /// Belirli bir şirketin aktif veya pasif turlarının gerçek zamanlı akışı.
+  ///
+  /// Birleşik index gerektiren `orderBy` + `isDeleted` filtresi kaldırıldı;
+  /// yalnızca `companyId` Firestore'da filtrelenir, geri kalanı client-side işlenir.
   Stream<List<TourModel>> streamToursByCompany(String companyId, {required bool isDeleted}) {
     return _firestore
         .collection('tours')
         .where('companyId', isEqualTo: companyId)
-        .where('isDeleted', isEqualTo: isDeleted)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(_toTourList);
+        .map(
+          (snap) => _toTourList(snap).where((t) => t.isDeleted == isDeleted).toList()
+            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0))),
+        );
   }
 
   /// Tur ekler; dönen değer oluşturulan dokümanın ID'sidir.
@@ -192,6 +241,11 @@ class SuperAdminService {
   /// Soft-delete: `isDeleted = true` yapılır, veri kaybolmaz.
   Future<void> deleteTour(String tourId) {
     return _firestore.collection('tours').doc(tourId).update({'isDeleted': true});
+  }
+
+  /// Turun aktif/pasif durumunu değiştirir.
+  Future<void> setTourActive(String tourId, {required bool isActive}) {
+    return _firestore.collection('tours').doc(tourId).update({'isDeleted': !isActive});
   }
 
   /// Tek tur getirir; bulunamazsa null döner.
@@ -309,6 +363,14 @@ class SuperAdminService {
     await batch.commit();
   }
 
+  Future<void> updateGuide(String guideId, Map<String, dynamic> data) {
+    return _firestore.collection('users').doc(guideId).update(data);
+  }
+
+  Future<void> setGuideActive(String guideId, {required bool isActive}) {
+    return setUserActive(guideId, isActive: isActive);
+  }
+
   // ━━━━━━━━━━━━━ Bildirimler ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   /// Belirli bir şirkete bildirim gönderir.
@@ -406,6 +468,18 @@ class SuperAdminService {
   /// Geri bildirimi kalıcı olarak siler.
   Future<void> deleteFeedback(String feedbackId) {
     return _firestore.collection('feedbacks').doc(feedbackId).delete();
+  }
+
+  Future<void> setFeedbackResolved({
+    required String feedbackId,
+    required bool isResolved,
+    required String resolvedBy,
+  }) {
+    return _firestore.collection('feedbacks').doc(feedbackId).update({
+      'isResolved': isResolved,
+      'resolvedBy': isResolved ? resolvedBy : FieldValue.delete(),
+      'resolvedAt': isResolved ? FieldValue.serverTimestamp() : FieldValue.delete(),
+    });
   }
 
   // ─── Dönüştürücüler ───────────────────────────────────────────────────────
