@@ -113,10 +113,36 @@ class AuthService {
     return UserModel.fromMap(doc.data()!, doc.id);
   }
 
-  Future<void> signOut() => _auth.signOut();
+  Future<void> signOut() async {
+    if (_auth.currentUser == null) return;
+    await _auth.signOut();
+  }
 
   static Future<void> sendPasswordReset(String email) {
     return FirebaseAuth.instance.sendPasswordResetEmail(email: email.trim());
+  }
+
+  /// Yonetilen bir kullanicinin parolasini mevcut oturumu bozmadan gunceller.
+  static Future<void> updateUserPasswordWithSecondaryApp({
+    required String email,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final secondaryApp = await Firebase.initializeApp(
+      name: 'secondary_pwd_$ts',
+      options: Firebase.app().options,
+    );
+    try {
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      final credential = await secondaryAuth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: currentPassword,
+      );
+      await credential.user!.updatePassword(newPassword);
+    } finally {
+      await secondaryApp.delete();
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -126,7 +152,7 @@ class AuthService {
   /// Geçici bir ikincil Firebase uygulaması üzerinden yeni kullanıcı oluşturur.
   ///
   /// Döndürülen değer yeni kullanıcının UID'sidir.
-  /// [AdminTourService] ve [SuperAdminService] katılımcı / rehber eklerken
+  /// Merkezi katilimci / rehber akislarinda
   /// mevcut yönetici oturumunun kapanmaması için bu metodu çağırır.
   static Future<String> createSecondaryAuthUser(String email, String password) async {
     final ts = DateTime.now().millisecondsSinceEpoch;

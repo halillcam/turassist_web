@@ -1,5 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+bool _asBool(dynamic value, {bool fallback = true}) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  if (value is String) {
+    switch (value.trim().toLowerCase()) {
+      case 'true':
+      case '1':
+      case 'yes':
+      case 'evet':
+        return true;
+      case 'false':
+      case '0':
+      case 'no':
+      case 'hayir':
+      case 'hayır':
+        return false;
+    }
+  }
+  return fallback;
+}
+
 class CompanyModel {
   final String? id;
   final String companyName;
@@ -29,7 +50,7 @@ class CompanyModel {
       contactPhone: map['contactPhone'] ?? '',
       logo: map['logo'] ?? '',
       adminUid: map['admin_uid'] ?? '',
-      status: map['status'] ?? true,
+      status: _asBool(map['status']),
       createdAt: map['createdAt'],
     );
   }

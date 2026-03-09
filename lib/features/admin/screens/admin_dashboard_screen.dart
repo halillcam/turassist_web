@@ -4,7 +4,6 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../features/auth/presentation/controllers/auth_controller.dart';
 import '../../../core/widgets/sidebar_menu.dart';
-import '../controllers/admin_dashboard_controller.dart';
 import 'tours/active_tours_screen.dart';
 import 'tours/passive_tours_screen.dart';
 import 'tours/add_tour_screen.dart';
@@ -14,8 +13,8 @@ import 'notifications/admin_notifications_screen.dart';
 
 /// Admin panelinin ana iskelet ekranı.
 ///
-/// Navigasyon ve şirket kimliği yönetimi [AdminDashboardController] tarafından
-/// sağlanır. Tüm bağımlılıklar [AdminDashboardBinding] üzerinden enjekte edilir.
+/// Şirket kimliği doğrudan [AuthController.currentUser] üzerinden okunur.
+/// Tüm bağımlılıklar [AdminDashboardBinding] üzerinden enjekte edilir.
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -24,8 +23,7 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  // Binding tarafından kayıt edilmiş controller — Get.put() çağrısı gerekmez.
-  late final AdminDashboardController _dashboardController;
+  int _selectedIndex = 0;
 
   static const _menuItems = [
     SidebarItem(icon: Icons.tour, label: AppStrings.activeTours),
@@ -35,13 +33,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     SidebarItem(icon: Icons.feedback, label: AppStrings.feedback),
     SidebarItem(icon: Icons.notifications, label: AppStrings.notifications),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    // Controller, AdminDashboardBinding tarafından kayıt edildi; sadece bulunur.
-    _dashboardController = Get.find<AdminDashboardController>();
-  }
 
   Future<void> _handleLogout() async {
     await Get.find<AuthController>().logout();
@@ -73,6 +64,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authController = Get.find<AuthController>();
     return Scaffold(
       body: Obx(
         () => Row(
@@ -80,17 +72,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             SidebarMenu(
               title: 'Admin Panel',
               items: _menuItems,
-              selectedIndex: _dashboardController.selectedIndex.value,
-              onItemSelected: _dashboardController.setSelectedIndex,
+              selectedIndex: _selectedIndex,
+              onItemSelected: (index) => setState(() => _selectedIndex = index),
               onLogout: _handleLogout,
             ),
             Expanded(
-              child: _dashboardController.isLoading.value
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildScreen(
-                      _dashboardController.companyId.value,
-                      _dashboardController.selectedIndex.value,
-                    ),
+              child: _buildScreen(
+                authController.currentUser.value?.companyId.isEmpty == true
+                    ? null
+                    : authController.currentUser.value?.companyId,
+                _selectedIndex,
+              ),
             ),
           ],
         ),

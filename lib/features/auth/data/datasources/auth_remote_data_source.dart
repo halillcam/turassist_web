@@ -54,12 +54,13 @@ class AuthRemoteDataSource implements IAuthRemoteDataSource {
     final data = {
       'email': email.trim(),
       'fullName': name,
+      'companyId': '',
       'role': role,
       'createdAt': FieldValue.serverTimestamp(),
     };
     await _firestore.collection('users').doc(uid).set(data);
 
-    return AuthUserModel(id: uid, email: email.trim(), name: name, roleRaw: role);
+    return AuthUserModel(id: uid, email: email.trim(), name: name, companyId: '', roleRaw: role);
   }
 
   @override

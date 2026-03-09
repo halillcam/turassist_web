@@ -20,6 +20,7 @@ mixin _$UserEntity {
   String get id => throw _privateConstructorUsedError;
   String get email => throw _privateConstructorUsedError;
   String get name => throw _privateConstructorUsedError;
+  String get companyId => throw _privateConstructorUsedError;
   UserRole get role => throw _privateConstructorUsedError;
 
   /// Create a copy of UserEntity
@@ -36,7 +37,13 @@ abstract class $UserEntityCopyWith<$Res> {
     $Res Function(UserEntity) then,
   ) = _$UserEntityCopyWithImpl<$Res, UserEntity>;
   @useResult
-  $Res call({String id, String email, String name, UserRole role});
+  $Res call({
+    String id,
+    String email,
+    String name,
+    String companyId,
+    UserRole role,
+  });
 }
 
 /// @nodoc
@@ -57,6 +64,7 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
     Object? id = null,
     Object? email = null,
     Object? name = null,
+    Object? companyId = null,
     Object? role = null,
   }) {
     return _then(
@@ -72,6 +80,10 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
             name: null == name
                 ? _value.name
                 : name // ignore: cast_nullable_to_non_nullable
+                      as String,
+            companyId: null == companyId
+                ? _value.companyId
+                : companyId // ignore: cast_nullable_to_non_nullable
                       as String,
             role: null == role
                 ? _value.role
@@ -92,7 +104,13 @@ abstract class _$$UserEntityImplCopyWith<$Res>
   ) = __$$UserEntityImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String id, String email, String name, UserRole role});
+  $Res call({
+    String id,
+    String email,
+    String name,
+    String companyId,
+    UserRole role,
+  });
 }
 
 /// @nodoc
@@ -112,6 +130,7 @@ class __$$UserEntityImplCopyWithImpl<$Res>
     Object? id = null,
     Object? email = null,
     Object? name = null,
+    Object? companyId = null,
     Object? role = null,
   }) {
     return _then(
@@ -127,6 +146,10 @@ class __$$UserEntityImplCopyWithImpl<$Res>
         name: null == name
             ? _value.name
             : name // ignore: cast_nullable_to_non_nullable
+                  as String,
+        companyId: null == companyId
+            ? _value.companyId
+            : companyId // ignore: cast_nullable_to_non_nullable
                   as String,
         role: null == role
             ? _value.role
@@ -144,6 +167,7 @@ class _$UserEntityImpl implements _UserEntity {
     required this.id,
     required this.email,
     required this.name,
+    required this.companyId,
     required this.role,
   });
 
@@ -154,11 +178,13 @@ class _$UserEntityImpl implements _UserEntity {
   @override
   final String name;
   @override
+  final String companyId;
+  @override
   final UserRole role;
 
   @override
   String toString() {
-    return 'UserEntity(id: $id, email: $email, name: $name, role: $role)';
+    return 'UserEntity(id: $id, email: $email, name: $name, companyId: $companyId, role: $role)';
   }
 
   @override
@@ -169,11 +195,14 @@ class _$UserEntityImpl implements _UserEntity {
             (identical(other.id, id) || other.id == id) &&
             (identical(other.email, email) || other.email == email) &&
             (identical(other.name, name) || other.name == name) &&
+            (identical(other.companyId, companyId) ||
+                other.companyId == companyId) &&
             (identical(other.role, role) || other.role == role));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, id, email, name, role);
+  int get hashCode =>
+      Object.hash(runtimeType, id, email, name, companyId, role);
 
   /// Create a copy of UserEntity
   /// with the given fields replaced by the non-null parameter values.
@@ -189,6 +218,7 @@ abstract class _UserEntity implements UserEntity {
     required final String id,
     required final String email,
     required final String name,
+    required final String companyId,
     required final UserRole role,
   }) = _$UserEntityImpl;
 
@@ -198,6 +228,8 @@ abstract class _UserEntity implements UserEntity {
   String get email;
   @override
   String get name;
+  @override
+  String get companyId;
   @override
   UserRole get role;
 

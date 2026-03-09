@@ -71,7 +71,8 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
 
   @override
   Future<String> addTour(TourDto dto) async {
-    final ref = await _tours.add(dto.toJson());
+    final payload = await _payloadWithCompanyName(dto);
+    final ref = await _tours.add(payload);
     return ref.id;
   }
 
@@ -87,7 +88,7 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
     final ids = <String>[];
 
     for (final date in resolvedDates) {
-      final data = dto.toJson()
+      final data = (await _payloadWithCompanyName(dto))
         ..['departureDate'] = Timestamp.fromDate(date)
         ..['seriesId'] = seriesId;
       final ref = await _tours.add(data);
@@ -112,7 +113,9 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
   @override
   Future<String> getCompanyName(String companyId) async {
     final doc = await _db.collection('companies').doc(companyId).get();
-    return (doc.data()?['name'] as String?) ?? '';
+    final data = doc.data();
+    if (data == null) return '';
+    return (data['companyName'] as String?) ?? (data['name'] as String?) ?? '';
   }
 
   @override
@@ -148,5 +151,15 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
     }
 
     return [];
+  }
+
+  Future<Map<String, dynamic>> _payloadWithCompanyName(TourDto dto) async {
+    final companyName = dto.companyName.trim().isNotEmpty
+        ? dto.companyName.trim()
+        : await getCompanyName(dto.companyId);
+
+    final payload = dto.toJson();
+    payload['companyName'] = companyName;
+    return payload;
   }
 }

@@ -1,22 +1,22 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../guides/presentation/controllers/guide_controller.dart';
 
-class AddGuideScreen extends StatefulWidget {
+class SaAddGuideScreen extends StatefulWidget {
   final String tourId;
+  final String companyId;
 
-  const AddGuideScreen({super.key, required this.tourId});
+  const SaAddGuideScreen({super.key, required this.tourId, required this.companyId});
 
   @override
-  State<AddGuideScreen> createState() => _AddGuideScreenState();
+  State<SaAddGuideScreen> createState() => _SaAddGuideScreenState();
 }
 
-class _AddGuideScreenState extends State<AddGuideScreen> {
-  late final GuideController _controller;
+class _SaAddGuideScreenState extends State<SaAddGuideScreen> {
+  late final GuideController _gc;
   final _formKey = GlobalKey<FormState>();
   final _guideIdCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -24,14 +24,14 @@ class _AddGuideScreenState extends State<AddGuideScreen> {
   final _phoneCtrl = TextEditingController();
 
   String get _normalizedGuideId => AuthService.normalizeGuideId(_guideIdCtrl.text);
-  String get _loginEmail =>
+
+  String get _generatedLoginEmail =>
       _normalizedGuideId.isEmpty ? '' : AuthService.buildGuideLoginEmail(_normalizedGuideId);
 
   @override
   void initState() {
     super.initState();
-    // Binding tarafindan enjekte edilen GuideController alinir
-    _controller = Get.find<GuideController>();
+    _gc = Get.find<GuideController>();
   }
 
   @override
@@ -45,57 +45,41 @@ class _AddGuideScreenState extends State<AddGuideScreen> {
 
   Future<void> _handleAdd() async {
     if (!_formKey.currentState!.validate()) return;
-
-    // Sirket kimligi oturum bilgisinden okunur; ekstra admin controller gerekmez.
-    final companyId = Get.find<AuthController>().currentUser.value?.companyId;
-    if (companyId == null || companyId.isEmpty) {
-      Get.snackbar(
-        'Hata',
-        'Sirket bilgisi alinamadi',
-        backgroundColor: AppColors.error,
-        colorText: Colors.white,
-      );
-      return;
-    }
-
+    // Controller hatası dahilen yönetir, isLoading reaktif güncellenir.
     final guideId = _normalizedGuideId;
     final password = _passwordCtrl.text.trim();
-
-    // Controller hata mesajlarini icsel olarak yonetir
-    final success = await _controller.addGuide(
+    final ok = await _gc.addGuide(
       guideId: guideId,
       password: password,
       fullName: _fullNameCtrl.text.trim(),
       phone: _phoneCtrl.text.trim(),
       tourId: widget.tourId,
-      companyId: companyId,
+      companyId: widget.companyId,
     );
-
-    if (success && mounted) {
-      await _showCredentialsDialog(guideId: guideId, password: password);
-      if (mounted) Navigator.pop(context);
-    }
+    if (!ok || !mounted) return;
+    await _showCredentialsDialog(guideId: guideId, password: password);
+    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _showCredentialsDialog({required String guideId, required String password}) {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Tur sorumlusu olusturuldu'),
+      builder: (context) => AlertDialog(
+        title: const Text('Tur sorumlusu oluşturuldu'),
         content: SelectionArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Asagidaki giris bilgilerini tur sorumlusuna iletin.',
+                'Aşağıdaki giriş bilgilerini tur sorumlusuna iletin.',
                 style: TextStyle(color: AppColors.textSecondary),
               ),
               const SizedBox(height: 20),
-              _CredentialItem(label: 'Guide ID', value: guideId),
+              _credentialItem('Guide ID', guideId),
               const SizedBox(height: 12),
-              _CredentialItem(label: 'Sifre', value: password),
+              _credentialItem('Şifre', password),
             ],
           ),
         ),
@@ -103,6 +87,40 @@ class _AddGuideScreenState extends State<AddGuideScreen> {
           FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Tamam')),
         ],
       ),
+    );
+  }
+
+  Widget _credentialItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: SelectableText(
+            value,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -137,7 +155,8 @@ class _AddGuideScreenState extends State<AddGuideScreen> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Tur sorumlusu icin ID ve sifre olusturulur. Mobil uygulamada tur sorumlusu olarak giris yapar.',
+                    'Tur sorumlusu için ID ve şifre oluşturulur.\n'
+                    'Mobil uygulamada tur sorumlusu olarak giriş yapar.',
                     style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
                   const SizedBox(height: 24),
@@ -146,14 +165,15 @@ class _AddGuideScreenState extends State<AddGuideScreen> {
                     _guideIdCtrl,
                     required: true,
                     onChanged: (_) => setState(() {}),
-                    helperText: _loginEmail.isEmpty
-                        ? 'Sistem giris tanimlayicisini otomatik uretir.'
-                        : 'Giris tanimlayicisi: $_loginEmail',
-                    validator: (v) {
-                      final id = AuthService.normalizeGuideId(v ?? '');
-                      if (id.isEmpty) return 'Guide ID zorunlu';
-                      if (!RegExp(r'^[A-Z0-9-]+$').hasMatch(id))
-                        return 'Sadece harf, rakam ve tire kullanin';
+                    helperText: _generatedLoginEmail.isEmpty
+                        ? 'Sistem giriş tanımlayıcısını otomatik üretir.'
+                        : 'Giriş tanımlayıcısı: $_generatedLoginEmail',
+                    validator: (value) {
+                      final guideId = AuthService.normalizeGuideId(value ?? '');
+                      if (guideId.isEmpty) return 'Guide ID zorunlu';
+                      if (!RegExp(r'^[A-Z0-9-]+$').hasMatch(guideId)) {
+                        return 'Sadece harf, rakam ve tire kullanın';
+                      }
                       return null;
                     },
                   ),
@@ -163,25 +183,25 @@ class _AddGuideScreenState extends State<AddGuideScreen> {
                   _field('Telefon *', _phoneCtrl, keyboard: TextInputType.phone, required: true),
                   const SizedBox(height: 12),
                   _field(
-                    'Sifre *',
+                    'Şifre *',
                     _passwordCtrl,
                     obscure: true,
                     required: true,
-                    validator: (v) {
-                      final p = (v ?? '').trim();
-                      if (p.isEmpty) return 'Sifre zorunlu';
-                      if (p.length < 6) return 'En az 6 karakter girin';
+                    validator: (value) {
+                      final password = (value ?? '').trim();
+                      if (password.isEmpty) return 'Şifre zorunlu';
+                      if (password.length < 6) return 'En az 6 karakter girin';
                       return null;
                     },
                   ),
                   const SizedBox(height: 24),
-                  // isLoading reaktif olarak controller uzerinden izlenir
-                  Obx(
-                    () => SizedBox(
+                  Obx(() {
+                    final loading = _gc.isLoading.value;
+                    return SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: _controller.isLoading.value ? null : _handleAdd,
-                        icon: _controller.isLoading.value
+                        onPressed: loading ? null : _handleAdd,
+                        icon: loading
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
@@ -191,7 +211,7 @@ class _AddGuideScreenState extends State<AddGuideScreen> {
                                 ),
                               )
                             : const Icon(Icons.admin_panel_settings),
-                        label: Text(_controller.isLoading.value ? 'Ekleniyor...' : AppStrings.add),
+                        label: Text(loading ? 'Ekleniyor...' : AppStrings.add),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -199,8 +219,8 @@ class _AddGuideScreenState extends State<AddGuideScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -234,50 +254,6 @@ class _AddGuideScreenState extends State<AddGuideScreen> {
         isDense: true,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Dumb widget  kimlik bilgisi gosterim satiri
-// ---------------------------------------------------------------------------
-class _CredentialItem extends StatelessWidget {
-  final String label;
-  final String value;
-  const _CredentialItem({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: SelectableText(
-            value,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

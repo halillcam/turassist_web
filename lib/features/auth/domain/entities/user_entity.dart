@@ -10,6 +10,7 @@ class UserEntity with _$UserEntity {
     required String id,
     required String email,
     required String name,
+    required String companyId,
     required UserRole role,
   }) = _UserEntity;
 }

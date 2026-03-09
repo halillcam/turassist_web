@@ -2,6 +2,27 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/entities/tour_entity.dart';
 
+bool _asBool(dynamic value, {bool fallback = false}) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  if (value is String) {
+    switch (value.trim().toLowerCase()) {
+      case 'true':
+      case '1':
+      case 'yes':
+      case 'evet':
+        return true;
+      case 'false':
+      case '0':
+      case 'no':
+      case 'hayir':
+      case 'hayır':
+        return false;
+    }
+  }
+  return fallback;
+}
+
 // ─── BusInfo ──────────────────────────────────────────────────────────────────
 
 class BusInfoDto {
@@ -168,7 +189,7 @@ class TourDto {
           .whereType<DateTime>()
           .toList(),
       seriesId: json['seriesId'] as String?,
-      isDeleted: json['isDeleted'] as bool? ?? false,
+      isDeleted: _asBool(json['isDeleted']),
       createdAt: _ts(json['createdAt']),
     );
   }

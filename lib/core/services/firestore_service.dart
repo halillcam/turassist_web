@@ -2,10 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Genel amaçlı Firestore yardımcı servisi.
 ///
-/// Domain servislerinin ([AdminTourService], [SuperAdminService]) dışında kalan
-/// tek seferlik Firestore işlemleri için kullanılır. Domain servisleri doğrudan
-/// koleksiyon referanslarıyla çalışır; bu sınıf yalnızca genel ihtiyaçlar için
-/// tercih edilir.
+/// Uygulamanin merkezi modullerinde kullanilan ortak Firestore yardimcisidir.
+/// Tek seferlik okuma / yazma ve koleksiyon referansi ihtiyaclarini kapsuller.
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 

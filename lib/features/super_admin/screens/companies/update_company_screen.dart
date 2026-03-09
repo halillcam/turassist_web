@@ -33,7 +33,7 @@ class _UpdateCompanyScreenState extends State<UpdateCompanyScreen> {
 
   Future<void> _loadCompanyData() async {
     try {
-      // Sirket verisi CompanyController uzerinden alinir (SuperAdminService kullanilmaz)
+      // Sirket verisi merkezi CompanyController uzerinden alinir.
       final company = await Get.find<CompanyController>().getCompany(widget.companyId);
       if (company == null || !mounted) return;
 

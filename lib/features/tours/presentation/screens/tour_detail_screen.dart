@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +8,7 @@ import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/user_model.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
+import '../../../users/presentation/controllers/user_controller.dart';
 import '../../domain/entities/tour_entity.dart';
 import '../controllers/tour_controller.dart';
 
@@ -24,6 +24,7 @@ class TourDetailScreen extends StatefulWidget {
 
 class _TourDetailScreenState extends State<TourDetailScreen> {
   late final TourController _controller;
+  late final UserController _userController;
 
   static const _dayLabels = {
     1: 'Pazartesi',
@@ -39,6 +40,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
   void initState() {
     super.initState();
     _controller = Get.find<TourController>();
+    _userController = Get.find<UserController>();
     _controller.watchTour(widget.tourId);
   }
 
@@ -285,7 +287,9 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
 
   Widget _buildGuideCard(TourEntity tour) {
     return FutureBuilder<UserModel?>(
-      future: tour.guideId.isEmpty ? Future.value(null) : _controller.getGuideByUid(tour.guideId),
+      future: tour.guideId.isEmpty
+          ? Future.value(null)
+          : _userController.getUserByUid(tour.guideId),
       builder: (context, snapshot) {
         final guide = snapshot.data;
         final usesGuideLoginId =
@@ -456,7 +460,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
   // ─── Guide Management ─────────────────────────────────────────────────────
 
   Future<void> _toggleGuideActive(UserModel guide) async {
-    await _controller.setGuideActive(guide.uid!, isActive: guide.isDeleted);
+    await _userController.toggleUserActive(guide.uid!, isActive: guide.isDeleted);
     if (mounted) setState(() {});
   }
 
@@ -472,7 +476,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
       return;
     }
     try {
-      await _controller.sendPasswordResetEmail(guide.email);
+      await AuthService.sendPasswordReset(guide.email);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -480,11 +484,11 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
           backgroundColor: AppColors.success,
         ),
       );
-    } on FirebaseAuthException catch (e) {
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? e.code), backgroundColor: AppColors.error),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error));
     }
   }
 
@@ -571,7 +575,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                     );
                   }
                 : () async {
-                    await _controller.updateGuide(guide.uid!, {
+                    await _userController.updateUser(guide.uid!, {
                       'fullName': fullNameCtrl.text.trim(),
                       'phone': phoneCtrl.text.trim(),
                     });
@@ -579,12 +583,12 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                     final newPwd = newPasswordCtrl.text.trim();
                     if (newPwd.isNotEmpty && guide.guidePassword != null) {
                       try {
-                        await _controller.updateGuidePassword(
-                          guideId: guide.uid!,
-                          guideEmail: guide.email,
+                        await AuthService.updateUserPasswordWithSecondaryApp(
+                          email: guide.email,
                           currentPassword: guide.guidePassword!,
                           newPassword: newPwd,
                         );
+                        await _userController.updateUser(guide.uid!, {'guidePassword': newPwd});
                       } catch (e) {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(

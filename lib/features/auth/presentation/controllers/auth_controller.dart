@@ -3,6 +3,15 @@ import 'package:get/get.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
+import '../../../communication/presentation/controllers/communication_controller.dart';
+import '../../../companies/presentation/controllers/company_controller.dart';
+import '../../../completion/presentation/controllers/completion_controller.dart';
+import '../../../feedback/presentation/controllers/feedback_controller.dart';
+import '../../../guides/presentation/controllers/guide_controller.dart';
+import '../../../notifications/presentation/controllers/notification_controller.dart';
+import '../../../participants/presentation/controllers/participant_controller.dart';
+import '../../../tours/presentation/controllers/tour_controller.dart';
+import '../../../users/presentation/controllers/user_controller.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/usecases/get_current_user_usecase.dart';
 import '../../domain/usecases/sign_in_usecase.dart';
@@ -80,6 +89,13 @@ class AuthController extends GetxController {
   // ─── Çıkış ───────────────────────────────────────────────────────────────
 
   Future<void> logout() async {
+    if (isLoading.value) return;
+    isLoading.value = true;
+    Get.closeAllSnackbars();
+
+    // Yetki düşmeden önce role-scope controller'ları kapatır.
+    _disposeSessionControllers();
+
     final result = await _signOut();
     result.fold(
       (failure) => Get.snackbar(
@@ -90,13 +106,12 @@ class AuthController extends GetxController {
         colorText: Colors.white,
       ),
       (_) {
-        currentUser.value = null;
-        isAuthenticated.value = false;
-        // offAllNamed route'ları temizler; binding dispose olunca
-        // tüm Firestore stream abonelikleri iptal edilir.
+        _resetAuthState();
+        // Tüm route geçmişini temizler; geri tuşu ile yetkili ekrana dönülemez.
         Get.offAllNamed(AppRoutes.login);
       },
     );
+    isLoading.value = false;
   }
 
   // ─── Yardımcılar ─────────────────────────────────────────────────────────
@@ -107,5 +122,31 @@ class AuthController extends GetxController {
       UserRole.admin => AppRoutes.adminDashboard,
     };
     Get.offAllNamed(route);
+  }
+
+  void _resetAuthState() {
+    currentUser.value = null;
+    isAuthenticated.value = false;
+    errorMessage.value = '';
+    emailController.clear();
+    passwordController.clear();
+  }
+
+  void _disposeSessionControllers() {
+    _deleteIfRegistered<CommunicationController>();
+    _deleteIfRegistered<CompletionController>();
+    _deleteIfRegistered<CompanyController>();
+    _deleteIfRegistered<FeedbackController>();
+    _deleteIfRegistered<GuideController>();
+    _deleteIfRegistered<NotificationController>();
+    _deleteIfRegistered<ParticipantController>();
+    _deleteIfRegistered<TourController>();
+    _deleteIfRegistered<UserController>();
+  }
+
+  void _deleteIfRegistered<T>() {
+    if (Get.isRegistered<T>()) {
+      Get.delete<T>(force: true);
+    }
   }
 }

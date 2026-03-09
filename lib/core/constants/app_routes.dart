@@ -30,6 +30,27 @@ import '../../features/tours/presentation/bindings/tour_binding.dart';
 class AppRoutes {
   AppRoutes._();
 
+  static bool _asBool(dynamic value, {bool fallback = false}) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      switch (value.trim().toLowerCase()) {
+        case 'true':
+        case '1':
+        case 'yes':
+        case 'evet':
+          return true;
+        case 'false':
+        case '0':
+        case 'no':
+        case 'hayir':
+        case 'hayır':
+          return false;
+      }
+    }
+    return fallback;
+  }
+
   static const String login = '/login';
   static const String adminDashboard = '/admin';
   static const String superAdminDashboard = '/super-admin';
@@ -210,7 +231,7 @@ class AppRoutes {
             companyId: scheduleArgs['companyId'] as String,
             representativeTourId: scheduleArgs['representativeTourId'] as String,
             seriesId: scheduleArgs['seriesId'] as String?,
-            isDeleted: (scheduleArgs['isDeleted'] as bool?) ?? false,
+            isDeleted: _asBool(scheduleArgs['isDeleted']),
           ),
         );
 

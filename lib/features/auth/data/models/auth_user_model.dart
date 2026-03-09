@@ -6,6 +6,7 @@ class AuthUserModel {
   final String id;
   final String email;
   final String name;
+  final String companyId;
 
   /// Firestore'daki ham rol string'i: 'admin' | 'super_admin'
   final String roleRaw;
@@ -14,6 +15,7 @@ class AuthUserModel {
     required this.id,
     required this.email,
     required this.name,
+    required this.companyId,
     required this.roleRaw,
   });
 
@@ -22,14 +24,26 @@ class AuthUserModel {
       id: docId,
       email: json['email'] as String? ?? '',
       name: json['fullName'] as String? ?? '',
+      companyId: json['companyId'] as String? ?? '',
       roleRaw: json['role'] as String? ?? '',
     );
   }
 
-  Map<String, dynamic> toJson() => {'email': email, 'fullName': name, 'role': roleRaw};
+  Map<String, dynamic> toJson() => {
+    'email': email,
+    'fullName': name,
+    'companyId': companyId,
+    'role': roleRaw,
+  };
 
   UserEntity toEntity() {
-    return UserEntity(id: id, email: email, name: name, role: _mapRole(roleRaw));
+    return UserEntity(
+      id: id,
+      email: email,
+      name: name,
+      companyId: companyId,
+      role: _mapRole(roleRaw),
+    );
   }
 
   static UserRole _mapRole(String raw) {

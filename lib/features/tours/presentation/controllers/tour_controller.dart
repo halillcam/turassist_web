@@ -5,8 +5,6 @@ import 'package:get/get.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/models/company_model.dart';
-import '../../../../core/models/user_model.dart';
-import '../../../admin/services/admin_tour_service.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../domain/entities/tour_entity.dart';
@@ -34,8 +32,6 @@ class TourController extends GetxController {
   final ToggleTourActiveUseCase _toggleTourActive;
   final GetCompanyNameUseCase _getCompanyName;
   final GetCompaniesUseCase _getCompanies;
-
-  final _adminService = AdminTourService();
 
   TourController({
     required StreamActiveToursUseCase streamActiveTours,
@@ -247,32 +243,6 @@ class TourController extends GetxController {
       deletedTours.clear();
     }
   }
-
-  Future<String?> loadAdminCompanyId() => _adminService.getCurrentCompanyId();
-
-  // ─── Rehber Yönetimi (bridge — AdminTourService üzerinden) ─────────────────
-
-  Future<UserModel?> getGuideByUid(String uid) => _adminService.getUserByUid(uid);
-
-  Future<void> setGuideActive(String uid, {required bool isActive}) =>
-      _adminService.setGuideActive(uid, isActive: isActive);
-
-  Future<void> updateGuide(String uid, Map<String, dynamic> data) =>
-      _adminService.updateGuide(uid, data);
-
-  Future<void> updateGuidePassword({
-    required String guideId,
-    required String guideEmail,
-    required String currentPassword,
-    required String newPassword,
-  }) => _adminService.updateGuidePassword(
-    guideId: guideId,
-    guideEmail: guideEmail,
-    currentPassword: currentPassword,
-    newPassword: newPassword,
-  );
-
-  Future<void> sendPasswordResetEmail(String email) => _adminService.sendPasswordResetEmail(email);
 
   // ─── Yardımcılar ─────────────────────────────────────────────────────────
 

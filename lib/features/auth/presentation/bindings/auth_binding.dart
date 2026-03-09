@@ -15,26 +15,38 @@ import '../controllers/auth_controller.dart';
 class AuthBinding extends Bindings {
   @override
   void dependencies() {
-    Get.lazyPut<IAuthRemoteDataSource>(() => AuthRemoteDataSource(), fenix: true);
+    if (!Get.isRegistered<IAuthRemoteDataSource>()) {
+      Get.lazyPut<IAuthRemoteDataSource>(() => AuthRemoteDataSource(), fenix: true);
+    }
 
-    Get.lazyPut<IAuthRepository>(
-      () => AuthRepositoryImpl(Get.find<IAuthRemoteDataSource>()),
-      fenix: true,
-    );
+    if (!Get.isRegistered<IAuthRepository>()) {
+      Get.lazyPut<IAuthRepository>(
+        () => AuthRepositoryImpl(Get.find<IAuthRemoteDataSource>()),
+        fenix: true,
+      );
+    }
 
-    Get.lazyPut(() => SignInUseCase(Get.find<IAuthRepository>()), fenix: true);
+    if (!Get.isRegistered<SignInUseCase>()) {
+      Get.lazyPut(() => SignInUseCase(Get.find<IAuthRepository>()), fenix: true);
+    }
 
-    Get.lazyPut(() => SignOutUseCase(Get.find<IAuthRepository>()), fenix: true);
+    if (!Get.isRegistered<SignOutUseCase>()) {
+      Get.lazyPut(() => SignOutUseCase(Get.find<IAuthRepository>()), fenix: true);
+    }
 
-    Get.lazyPut(() => GetCurrentUserUseCase(Get.find<IAuthRepository>()), fenix: true);
+    if (!Get.isRegistered<GetCurrentUserUseCase>()) {
+      Get.lazyPut(() => GetCurrentUserUseCase(Get.find<IAuthRepository>()), fenix: true);
+    }
 
-    Get.lazyPut<AuthController>(
-      () => AuthController(
-        signIn: Get.find<SignInUseCase>(),
-        signOut: Get.find<SignOutUseCase>(),
-        getCurrentUser: Get.find<GetCurrentUserUseCase>(),
-      ),
-      fenix: true,
-    );
+    if (!Get.isRegistered<AuthController>()) {
+      Get.lazyPut<AuthController>(
+        () => AuthController(
+          signIn: Get.find<SignInUseCase>(),
+          signOut: Get.find<SignOutUseCase>(),
+          getCurrentUser: Get.find<GetCurrentUserUseCase>(),
+        ),
+        fenix: true,
+      );
+    }
   }
 }

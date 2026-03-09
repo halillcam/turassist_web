@@ -9,7 +9,7 @@ import '../../../notifications/presentation/controllers/notification_controller.
 import '../../../participants/presentation/controllers/participant_controller.dart';
 import '../../../communication/presentation/controllers/communication_controller.dart';
 import '../../../tours/presentation/bindings/tour_binding.dart';
-import '../../controllers/admin_dashboard_controller.dart';
+import '../../../users/presentation/controllers/user_controller.dart';
 
 /// Admin dashboard rotasına girildiğinde kayıt edilmesi gereken tüm bağımlılıklar.
 ///
@@ -18,9 +18,6 @@ import '../../controllers/admin_dashboard_controller.dart';
 class AdminDashboardBinding extends Bindings {
   @override
   void dependencies() {
-    // Dashboard navigasyon + companyId yönetimi
-    Get.lazyPut(() => AdminDashboardController(db: Get.find<FirestoreService>()), fenix: true);
-
     // Tur CRUD (merkezi — features/tours)
     TourBinding().dependencies();
 
@@ -35,6 +32,9 @@ class AdminDashboardBinding extends Bindings {
 
     // Rehber işlemleri
     Get.lazyPut(() => GuideController(db: Get.find<FirestoreService>()), fenix: true);
+
+    // Kullanıcı işlemleri (tur detayında rehber yönetimi için gerekir)
+    Get.lazyPut(() => UserController(db: Get.find<FirestoreService>()), fenix: true);
 
     // Bildirimler
     Get.lazyPut(() => NotificationController(db: Get.find<FirestoreService>()), fenix: true);

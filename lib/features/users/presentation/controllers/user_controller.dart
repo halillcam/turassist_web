@@ -153,6 +153,13 @@ class UserController extends GetxController {
   List<UserModel> usersForCompany(String companyId) =>
       allUsers.where((u) => u.companyId == companyId).toList();
 
+  /// UID ile tek kullanıcı getirir; bulunamazsa null döner.
+  Future<UserModel?> getUserByUid(String uid) async {
+    final doc = await _db.getDocument('users', uid);
+    if (!doc.exists || doc.data() == null) return null;
+    return UserModel.fromMap(doc.data()!, doc.id);
+  }
+
   /// Kullanıcıya ait şirket adını döner — CompanyController üzerinden okur.
   String companyNameOf(String companyId) {
     final cc = Get.find<CompanyController>();
