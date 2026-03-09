@@ -3,9 +3,9 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/models/tour_model.dart';
-import '../../controllers/sa_tour_controller.dart';
-import 'super_admin_tour_detail_screen.dart';
+import '../../../../core/constants/app_routes.dart';
+import '../../../tours/domain/entities/tour_entity.dart';
+import '../../../tours/presentation/controllers/tour_controller.dart';
 
 class SaTourScheduleScreen extends StatefulWidget {
   final String companyId;
@@ -26,7 +26,7 @@ class SaTourScheduleScreen extends StatefulWidget {
 }
 
 class _SaTourScheduleScreenState extends State<SaTourScheduleScreen> {
-  late final SATourController _controller;
+  late final TourController _tc;
 
   static const _dayLabels = {
     1: 'Pazartesi',
@@ -41,101 +41,90 @@ class _SaTourScheduleScreenState extends State<SaTourScheduleScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = Get.find<SATourController>();
+    _tc = Get.find<TourController>();
+    // İlgili tur listesi, binding üzerinden gelen controller'dan yüklenir.
+    if (widget.isDeleted) {
+      _tc.loadDeletedTours(widget.companyId);
+    } else {
+      _tc.loadActiveTours(widget.companyId);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Tur Takvimi')),
-      body: StreamBuilder<List<TourModel>>(
-        stream: _controller.service.streamToursByCompany(
-          widget.companyId,
-          isDeleted: widget.isDeleted,
-        ),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                'Takvim yüklenemedi: ${snapshot.error}',
-                style: const TextStyle(color: AppColors.error),
-              ),
-            );
-          }
-
-          final tours = snapshot.data ?? const <TourModel>[];
-          final matchingTours = tours.where(_matchesSelection).toList();
-          if (matchingTours.isEmpty) {
-            return const Center(
-              child: Text(
-                'Bu ana tura ait takvim bulunamadı.',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            );
-          }
-
-          final group = _ResolvedTourGroup(
-            tours: matchingTours,
-            representativeTourId: widget.representativeTourId,
+      body: Obx(() {
+        if (_tc.isLoading.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final allTours = (widget.isDeleted ? _tc.deletedTours : _tc.activeTours).toList();
+        final matchingTours = allTours.where(_matchesSelection).toList();
+        if (matchingTours.isEmpty) {
+          return const Center(
+            child: Text(
+              'Bu ana tura ait takvim bulunamadı.',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           );
+        }
 
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 900;
-              final summary = _TourSummaryCard(group: group);
-              final schedule = _ScheduleList(
-                group: group,
-                onOpenDate: (date) => _openTourDetail(group.instanceForDate(date), date),
-                onOpenWithoutDate: () => _openTourDetail(group.representative, null),
-              );
+        final group = _ResolvedTourGroup(
+          tours: matchingTours,
+          representativeTourId: widget.representativeTourId,
+        );
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: isNarrow
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [summary, const SizedBox(height: 16), schedule],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 5, child: summary),
-                          const SizedBox(width: 16),
-                          Expanded(flex: 4, child: schedule),
-                        ],
-                      ),
-              );
-            },
-          );
-        },
-      ),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 900;
+            final summary = _TourSummaryCard(group: group);
+            final schedule = _ScheduleList(
+              group: group,
+              onOpenDate: (date) => _openTourDetail(group.instanceForDate(date), date),
+              onOpenWithoutDate: () => _openTourDetail(group.representative, null),
+            );
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: isNarrow
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [summary, const SizedBox(height: 16), schedule],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 5, child: summary),
+                        const SizedBox(width: 16),
+                        Expanded(flex: 4, child: schedule),
+                      ],
+                    ),
+            );
+          },
+        );
+      }),
     );
   }
 
-  bool _matchesSelection(TourModel tour) {
+  bool _matchesSelection(TourEntity tour) {
     if (widget.seriesId != null && widget.seriesId!.isNotEmpty) {
       return tour.seriesId == widget.seriesId;
     }
     return tour.id == widget.representativeTourId;
   }
 
-  void _openTourDetail(TourModel tour, DateTime? departureDate) {
-    final tourId = tour.id;
-    if (tourId == null) return;
-    Navigator.push(
+  void _openTourDetail(TourEntity tour, DateTime? departureDate) {
+    // Birleşik tur detayı ekranına yönlendirilir.
+    Navigator.pushNamed(
       context,
-      MaterialPageRoute(
-        builder: (_) => SuperAdminTourDetailScreen(tourId: tourId, departureDate: departureDate),
-      ),
+      AppRoutes.toursDetail,
+      arguments: {'tourId': tour.id, 'departureDate': departureDate},
     );
   }
 }
 
 class _ResolvedTourGroup {
-  final List<TourModel> tours;
+  final List<TourEntity> tours;
   final String representativeTourId;
 
   _ResolvedTourGroup({required this.tours, required this.representativeTourId}) {
@@ -146,7 +135,7 @@ class _ResolvedTourGroup {
     });
   }
 
-  TourModel get representative {
+  TourEntity get representative {
     for (final tour in tours) {
       if (tour.id == representativeTourId) return tour;
     }
@@ -169,7 +158,7 @@ class _ResolvedTourGroup {
     return result;
   }
 
-  TourModel instanceForDate(DateTime date) {
+  TourEntity instanceForDate(DateTime date) {
     if (tours.length == 1) return tours.first;
     final normalizedTarget = _normalizeDate(date);
     for (final tour in tours) {

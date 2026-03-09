@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/ticket_model.dart';
 import '../../../../core/models/user_model.dart';
-import '../../services/super_admin_service.dart';
+import '../../../participants/presentation/controllers/participant_controller.dart';
 
 class _ParticipantRowData {
   final TicketModel ticket;
@@ -13,27 +14,43 @@ class _ParticipantRowData {
   const _ParticipantRowData({required this.ticket, required this.user});
 }
 
-class SaParticipantsListScreen extends StatelessWidget {
+class SaParticipantsListScreen extends StatefulWidget {
   final String tourId;
   final DateTime? departureDate;
 
   const SaParticipantsListScreen({super.key, required this.tourId, this.departureDate});
 
-  Future<List<_ParticipantRowData>> _loadParticipantRows(
-    SuperAdminService service,
-    List<TicketModel> tickets,
-  ) async {
-    final users = await Future.wait(tickets.map((ticket) => service.getUserByUid(ticket.userId)));
+  @override
+  State<SaParticipantsListScreen> createState() => _SaParticipantsListScreenState();
+}
+
+class _SaParticipantsListScreenState extends State<SaParticipantsListScreen> {
+  late final ParticipantController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Binding tarafından enjekte edilen ParticipantController alınır.
+    _controller = Get.find<ParticipantController>();
+    _controller.watchTickets(widget.tourId);
+  }
+
+  @override
+  void dispose() {
+    _controller.stopWatching();
+    super.dispose();
+  }
+
+  Future<List<_ParticipantRowData>> _buildRows(List<TicketModel> tickets) async {
+    final users = await Future.wait(tickets.map((t) => _controller.getTicketUser(t.userId)));
     return List.generate(
       tickets.length,
-      (index) => _ParticipantRowData(ticket: tickets[index], user: users[index]),
+      (i) => _ParticipantRowData(ticket: tickets[i], user: users[i]),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final service = SuperAdminService();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text(AppStrings.participants),
@@ -59,7 +76,7 @@ class SaParticipantsListScreen extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
-                if (departureDate != null) ...[
+                if (widget.departureDate != null) ...[
                   const SizedBox(width: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -73,7 +90,7 @@ class SaParticipantsListScreen extends StatelessWidget {
                         const Icon(Icons.calendar_today, size: 12, color: AppColors.primary),
                         const SizedBox(width: 4),
                         Text(
-                          DateFormat('dd.MM.yyyy').format(departureDate!),
+                          DateFormat('dd.MM.yyyy').format(widget.departureDate!),
                           style: const TextStyle(
                             color: AppColors.primary,
                             fontSize: 12,
@@ -88,102 +105,100 @@ class SaParticipantsListScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: StreamBuilder<List<TicketModel>>(
-                stream: service.streamTourTickets(tourId),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Hata: ${snapshot.error}'));
-                  }
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final allTickets = snapshot.data!;
-                  final tickets = departureDate != null
-                      ? allTickets.where((ticket) {
-                          final ticketDate = ticket.departureDate;
-                          if (ticketDate == null) return false;
-                          return ticketDate.year == departureDate!.year &&
-                              ticketDate.month == departureDate!.month &&
-                              ticketDate.day == departureDate!.day;
-                        }).toList()
-                      : allTickets;
-                  if (tickets.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'Henüz katılımcı bulunmuyor.',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                    );
-                  }
-                  return FutureBuilder<List<_ParticipantRowData>>(
-                    future: _loadParticipantRows(service, tickets),
-                    builder: (context, userSnapshot) {
-                      if (!userSnapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
+              child: Obx(() {
+                final allTickets = _controller.tickets.toList();
+                if (_controller.isLoading.value) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final tickets = widget.departureDate != null
+                    ? allTickets.where((t) {
+                        final b = widget.departureDate!;
+                        return t.departureDate != null &&
+                            t.departureDate!.year == b.year &&
+                            t.departureDate!.month == b.month &&
+                            t.departureDate!.day == b.day;
+                      }).toList()
+                    : allTickets;
 
-                      final rows = userSnapshot.data!;
-                      return Card(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(
-                              AppColors.primary.withAlpha(20),
-                            ),
-                            columns: const [
-                              DataColumn(label: Text('#')),
-                              DataColumn(label: Text('Ad Soyad')),
-                              DataColumn(label: Text('Müşteri ID')),
-                              DataColumn(label: Text('Satış Tipi')),
-                              DataColumn(label: Text('TC No')),
-                              DataColumn(label: Text('Ödenen Tutar')),
-                              DataColumn(label: Text('Durum')),
-                              DataColumn(label: Text('QR Okutma')),
-                              DataColumn(label: Text('Satın Alma')),
-                            ],
-                            rows: rows.asMap().entries.map((entry) {
-                              final i = entry.key;
-                              final row = entry.value;
-                              final t = row.ticket;
-                              final user = row.user;
-                              final dateStr = t.purchaseDate != null
-                                  ? DateFormat('dd.MM.yyyy').format(t.purchaseDate!)
-                                  : '-';
-                              final loginId = user?.loginId?.trim().isNotEmpty == true
-                                  ? user!.loginId!
-                                  : '-';
-                              final saleType = user?.isPanelManagedCustomer == true
-                                  ? 'Fiziksel Satış'
-                                  : 'Uygulama';
-                              return DataRow(
-                                cells: [
-                                  DataCell(Text('${i + 1}')),
-                                  DataCell(Text(t.passengerName)),
-                                  DataCell(Text(loginId)),
-                                  DataCell(_sourceChip(saleType)),
-                                  DataCell(Text(t.tcNo.isEmpty ? '-' : t.tcNo)),
-                                  DataCell(Text('₺${t.pricePaid.toStringAsFixed(0)}')),
-                                  DataCell(_statusChip(t.status)),
-                                  DataCell(
-                                    Icon(
-                                      t.isScanned ? Icons.check_circle : Icons.cancel,
-                                      color: t.isScanned ? AppColors.success : AppColors.slate400,
-                                      size: 20,
-                                    ),
-                                  ),
-                                  DataCell(Text(dateStr)),
-                                ],
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      );
-                    },
+                if (tickets.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'Henüz katılımcı bulunmuyor.',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
                   );
-                },
-              ),
+                }
+
+                return FutureBuilder<List<_ParticipantRowData>>(
+                  future: _buildRows(tickets),
+                  builder: (_, snap) {
+                    if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                    return _ParticipantDataTable(rows: snap.data!);
+                  },
+                );
+              }),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dumb widget — katılımcı veri tablosu (if/loop/Get.find içermez)
+// ---------------------------------------------------------------------------
+class _ParticipantDataTable extends StatelessWidget {
+  final List<_ParticipantRowData> rows;
+  const _ParticipantDataTable({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(AppColors.primary.withAlpha(20)),
+          columns: const [
+            DataColumn(label: Text('#')),
+            DataColumn(label: Text('Ad Soyad')),
+            DataColumn(label: Text('Müşteri ID')),
+            DataColumn(label: Text('Satış Tipi')),
+            DataColumn(label: Text('TC No')),
+            DataColumn(label: Text('Ödenen Tutar')),
+            DataColumn(label: Text('Durum')),
+            DataColumn(label: Text('QR Okutma')),
+            DataColumn(label: Text('Satın Alma')),
+          ],
+          rows: rows.asMap().entries.map((entry) {
+            final i = entry.key;
+            final t = entry.value.ticket;
+            final user = entry.value.user;
+            final dateStr = t.purchaseDate != null
+                ? DateFormat('dd.MM.yyyy').format(t.purchaseDate!)
+                : '-';
+            final loginId = user?.loginId?.trim().isNotEmpty == true ? user!.loginId! : '-';
+            final saleType = user?.isPanelManagedCustomer == true ? 'Fiziksel Satış' : 'Uygulama';
+            return DataRow(
+              cells: [
+                DataCell(Text('${i + 1}')),
+                DataCell(Text(t.passengerName)),
+                DataCell(Text(loginId)),
+                DataCell(_sourceChip(saleType)),
+                DataCell(Text(t.tcNo.isEmpty ? '-' : t.tcNo)),
+                DataCell(Text('₺${t.pricePaid.toStringAsFixed(0)}')),
+                DataCell(_statusChip(t.status)),
+                DataCell(
+                  Icon(
+                    t.isScanned ? Icons.check_circle : Icons.cancel,
+                    color: t.isScanned ? AppColors.success : AppColors.slate400,
+                    size: 20,
+                  ),
+                ),
+                DataCell(Text(dateStr)),
+              ],
+            );
+          }).toList(),
         ),
       ),
     );

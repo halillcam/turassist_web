@@ -3,7 +3,8 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../controllers/sa_notification_controller.dart';
+import '../../../companies/presentation/controllers/company_controller.dart';
+import '../../../notifications/presentation/controllers/notification_controller.dart';
 
 class SuperAdminNotificationsScreen extends StatefulWidget {
   const SuperAdminNotificationsScreen({super.key});
@@ -18,8 +19,18 @@ class _SuperAdminNotificationsScreenState extends State<SuperAdminNotificationsS
 
   final _titleCtrl = TextEditingController();
   final _bodyCtrl = TextEditingController();
+  // Seçili şirket ID'si yerel olarak tutulur (CompanyController'da alan yok)
+  final _selectedCompanyId = Rxn<String>();
 
-  SANotificationController get _ctrl => Get.find<SANotificationController>();
+  NotificationController get _ctrl => Get.find<NotificationController>();
+  CompanyController get _companies => Get.find<CompanyController>();
+
+  @override
+  void initState() {
+    super.initState();
+    // SA: gönderilmiş bildirim geçmişi izlemeye başlanır
+    _ctrl.watchSentNotifications();
+  }
 
   @override
   void dispose() {
@@ -29,10 +40,16 @@ class _SuperAdminNotificationsScreenState extends State<SuperAdminNotificationsS
   }
 
   void _handleSend() {
-    _ctrl.sendNotification(title: _titleCtrl.text, body: _bodyCtrl.text).then((_) {
-      _titleCtrl.clear();
-      _bodyCtrl.clear();
-    });
+    _ctrl
+        .sendNotification(
+          title: _titleCtrl.text,
+          body: _bodyCtrl.text,
+          targetCompanyId: _selectedCompanyId.value,
+        )
+        .then((_) {
+          _titleCtrl.clear();
+          _bodyCtrl.clear();
+        });
   }
 
   InputDecoration _inputDecoration(String labelText) {
@@ -72,9 +89,9 @@ class _SuperAdminNotificationsScreenState extends State<SuperAdminNotificationsS
             ),
             const SizedBox(height: 20),
             Obx(() {
-              final companies = _ctrl.companies;
+              final companies = _companies.activeCompanies;
               return DropdownButtonFormField<String?>(
-                initialValue: _ctrl.selectedCompanyId.value,
+                initialValue: _selectedCompanyId.value,
                 isExpanded: true,
                 decoration: _inputDecoration(AppStrings.notificationTargetCompany),
                 items: [
@@ -89,7 +106,7 @@ class _SuperAdminNotificationsScreenState extends State<SuperAdminNotificationsS
                     ),
                   ),
                 ],
-                onChanged: (value) => _ctrl.selectedCompanyId.value = value,
+                onChanged: (value) => _selectedCompanyId.value = value,
               );
             }),
             const SizedBox(height: 16),

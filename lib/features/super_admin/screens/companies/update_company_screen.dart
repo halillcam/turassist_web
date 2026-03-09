@@ -4,8 +4,9 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../../core/widgets/custom_button.dart';
-import '../../controllers/company_controller.dart';
-import '../../services/super_admin_service.dart';
+import '../../../../core/models/user_model.dart';
+import '../../../companies/presentation/controllers/company_controller.dart';
+import '../../../users/presentation/controllers/user_controller.dart';
 
 class UpdateCompanyScreen extends StatefulWidget {
   final String companyId;
@@ -21,7 +22,6 @@ class _UpdateCompanyScreenState extends State<UpdateCompanyScreen> {
   final _companyTitleCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _fullNameCtrl = TextEditingController();
-  final _service = SuperAdminService();
   bool _isActive = true;
   bool _isDataLoaded = false;
 
@@ -33,7 +33,8 @@ class _UpdateCompanyScreenState extends State<UpdateCompanyScreen> {
 
   Future<void> _loadCompanyData() async {
     try {
-      final company = await _service.getCompany(widget.companyId);
+      // Sirket verisi CompanyController uzerinden alinir (SuperAdminService kullanilmaz)
+      final company = await Get.find<CompanyController>().getCompany(widget.companyId);
       if (company == null || !mounted) return;
 
       _companyTitleCtrl.text = company.companyName;
@@ -41,7 +42,10 @@ class _UpdateCompanyScreenState extends State<UpdateCompanyScreen> {
       _isActive = company.status;
 
       if (company.adminUid.isNotEmpty) {
-        final admin = await _service.getUserByUid(company.adminUid);
+        // Admin adi, UserController'in onbellekli listesinden bulunur
+        final UserModel? admin = Get.find<UserController>().allUsers.firstWhereOrNull(
+          (u) => u.uid == company.adminUid,
+        );
         if (admin != null && mounted) {
           _fullNameCtrl.text = admin.fullName;
         }
@@ -52,7 +56,7 @@ class _UpdateCompanyScreenState extends State<UpdateCompanyScreen> {
       if (mounted) {
         Get.snackbar(
           'Hata',
-          'Şirket verileri yüklenemedi: $e',
+          'Sirket verileri yuklenemedi: $e',
           snackPosition: SnackPosition.BOTTOM,
         );
       }

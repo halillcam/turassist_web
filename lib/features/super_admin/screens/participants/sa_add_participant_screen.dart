@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../services/super_admin_service.dart';
+import '../../../participants/presentation/controllers/participant_controller.dart';
 
 class SaAddParticipantScreen extends StatefulWidget {
   final String tourId;
@@ -23,7 +23,7 @@ class SaAddParticipantScreen extends StatefulWidget {
 }
 
 class _SaAddParticipantScreenState extends State<SaAddParticipantScreen> {
-  final _service = SuperAdminService();
+  late final ParticipantController _pc;
   final _formKey = GlobalKey<FormState>();
   final _participantIdCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -31,13 +31,18 @@ class _SaAddParticipantScreenState extends State<SaAddParticipantScreen> {
   final _phoneCtrl = TextEditingController();
   final _tcNoCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
-  bool _isLoading = false;
 
   String get _normalizedParticipantId => AuthService.normalizePanelLoginId(_participantIdCtrl.text);
 
   String get _generatedLoginEmail => _normalizedParticipantId.isEmpty
       ? ''
       : AuthService.buildCustomerLoginEmail(_normalizedParticipantId);
+
+  @override
+  void initState() {
+    super.initState();
+    _pc = Get.find<ParticipantController>();
+  }
 
   @override
   void dispose() {
@@ -52,49 +57,23 @@ class _SaAddParticipantScreenState extends State<SaAddParticipantScreen> {
 
   Future<void> _handleAdd() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final participantId = _normalizedParticipantId;
-      final password = _passwordCtrl.text.trim();
-
-      await _service.addParticipantToTour(
-        loginId: participantId,
-        password: password,
-        fullName: _fullNameCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
-        tcNo: _tcNoCtrl.text.trim(),
-        tourId: widget.tourId,
-        companyId: widget.companyId,
-        pricePaid: double.tryParse(_priceCtrl.text) ?? 0,
-        departureDate: widget.departureDate,
-      );
-
-      if (!mounted) return;
-      await _showCredentialsDialog(participantId: participantId, password: password);
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      Get.snackbar('Hata', _friendlyError(e), snackPosition: SnackPosition.BOTTOM);
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  String _friendlyError(Object error) {
-    final message = error.toString();
-    if (message.contains('login-id-already-in-use')) {
-      return 'Bu Müşteri ID başka bir panel hesabında zaten kullanılıyor.';
-    }
-    if (message.contains('email-already-in-use')) {
-      return 'Bu Müşteri ID zaten kullanılıyor.';
-    }
-    if (message.contains('weak-password')) {
-      return 'Şifre en az 6 karakter olmalıdır.';
-    }
-    if (message.contains('invalid-email')) {
-      return 'Müşteri ID formatı geçersiz.';
-    }
-    return 'İşlem başarısız: $message';
+    // Controller hatsı dahilen yönetir, isLoading reaktif güncellenir.
+    final participantId = _normalizedParticipantId;
+    final password = _passwordCtrl.text.trim();
+    final ok = await _pc.addParticipant(
+      loginId: participantId,
+      password: password,
+      fullName: _fullNameCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
+      tcNo: _tcNoCtrl.text.trim(),
+      tourId: widget.tourId,
+      companyId: widget.companyId,
+      pricePaid: double.tryParse(_priceCtrl.text) ?? 0,
+      departureDate: widget.departureDate,
+    );
+    if (!ok || !mounted) return;
+    await _showCredentialsDialog(participantId: participantId, password: password);
+    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _showCredentialsDialog({required String participantId, required String password}) {
@@ -255,26 +234,32 @@ class _SaAddParticipantScreenState extends State<SaAddParticipantScreen> {
                   const SizedBox(height: 12),
                   _field('Ödenen Tutar (₺)', _priceCtrl, keyboard: TextInputType.number),
                   const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _handleAdd,
-                      icon: _isLoading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.person_add),
-                      label: Text(_isLoading ? 'Ekleniyor...' : AppStrings.add),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  Obx(() {
+                    final loading = _pc.isLoading.value;
+                    return SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: loading ? null : _handleAdd,
+                        icon: loading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.person_add),
+                        label: Text(loading ? 'Ekleniyor...' : AppStrings.add),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
                 ],
               ),
             ),

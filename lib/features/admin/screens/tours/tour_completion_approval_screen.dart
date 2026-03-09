@@ -1,40 +1,49 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/tour_completion_request_model.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
-import '../../controllers/admin_completion_controller.dart';
+import '../../../../features/completion/presentation/controllers/completion_controller.dart';
 
+/// Rehberin gonderdigi tur tamamlama taleplerinin listelenip
+/// onaylandi / reddedildigi ekran.
+///
+/// [CompletionController] uzerinden calisir; eski AdminCompletionController
+/// referansi yoktur.
 class TourCompletionApprovalScreen extends StatefulWidget {
   final String companyId;
 
   const TourCompletionApprovalScreen({super.key, required this.companyId});
 
   @override
-  State<TourCompletionApprovalScreen> createState() => _TourCompletionApprovalScreenState();
+  State<TourCompletionApprovalScreen> createState() =>
+      _TourCompletionApprovalScreenState();
 }
 
-class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScreen> {
-  late final AdminCompletionController _controller;
+class _TourCompletionApprovalScreenState
+    extends State<TourCompletionApprovalScreen> {
+  late final CompletionController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = Get.find<AdminCompletionController>();
+    _controller = Get.find<CompletionController>();
+    // Sirkete ait tamamlama taleplerini gercek zamanli izle
+    _controller.watchRequests(widget.companyId);
   }
 
   void _approve(TourCompletionRequestModel req) {
     showDialog(
       context: context,
       builder: (_) => ConfirmationDialog(
-        title: 'Tur Bitirme Onayı',
+        title: 'Tur Bitirme Onayi',
         message:
-            'Bu turu bitirmek istediğinize emin misiniz?\nTur pasif hale geçecek ve rehber silinecektir.',
+            'Bu turu bitirmek istediginize emin misiniz?\nTur pasif hale gececek ve rehber silinecektir.',
         onConfirm: () async {
           try {
-            await _controller.approveTourCompletion(
+            await _controller.approve(
               requestId: req.id!,
               tourId: req.tourId,
               guideId: req.guideId,
@@ -42,15 +51,15 @@ class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScr
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Tur bitirme onaylandı.'),
+                content: Text('Tur bitirme onaylandi.'),
                 backgroundColor: AppColors.success,
               ),
             );
           } catch (e) {
             if (!mounted) return;
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error),
+            );
           }
         },
       ),
@@ -62,10 +71,10 @@ class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScr
       context: context,
       builder: (_) => ConfirmationDialog(
         title: 'Tur Bitirme Reddi',
-        message: 'Bu talebi reddetmek istediğinize emin misiniz?',
+        message: 'Bu talebi reddetmek istediginize emin misiniz?',
         onConfirm: () async {
           try {
-            await _controller.rejectTourCompletion(req.id!);
+            await _controller.reject(req.id!);
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -75,9 +84,9 @@ class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScr
             );
           } catch (e) {
             if (!mounted) return;
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error),
+            );
           }
         },
       ),
@@ -109,53 +118,65 @@ class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScr
             ),
             const SizedBox(height: 4),
             const Text(
-              'Tur sorumlusunun gönderdiği tur bitirme istekleri.',
+              'Tur sorumlusunun gonderdigi tur bitirme istekleri.',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 20),
             Expanded(
-              child: StreamBuilder<List<TourCompletionRequestModel>>(
-                stream: _controller.streamCompletionRequests(widget.companyId),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Hata: ${snapshot.error}'));
-                  }
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final requests = snapshot.data!;
-                  if (requests.isEmpty) {
-                    return const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle, size: 48, color: AppColors.slate300),
-                          SizedBox(height: 12),
-                          Text(
-                            'Bekleyen istek bulunmuyor.',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return ListView.separated(
-                    itemCount: requests.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) => _requestCard(requests[index]),
+              child: Obx(() {
+                if (_controller.isLoading.value) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final requests = _controller.requests;
+                if (requests.isEmpty) {
+                  return const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle, size: 48, color: AppColors.slate300),
+                        SizedBox(height: 12),
+                        Text(
+                          'Bekleyen istek bulunmuyor.',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
                   );
-                },
-              ),
+                }
+                return ListView.separated(
+                  itemCount: requests.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) => _RequestCard(
+                    request: requests[index],
+                    onApprove: _approve,
+                    onReject: _reject,
+                  ),
+                );
+              }),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _requestCard(TourCompletionRequestModel req) {
-    final dateStr = req.requestedAt != null
-        ? DateFormat('dd.MM.yyyy HH:mm').format(req.requestedAt!.toDate())
+/// Tek bir tamamlama talebini gosteren kart widget'i.
+class _RequestCard extends StatelessWidget {
+  final TourCompletionRequestModel request;
+  final void Function(TourCompletionRequestModel) onApprove;
+  final void Function(TourCompletionRequestModel) onReject;
+
+  const _RequestCard({
+    required this.request,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dateStr = request.requestedAt != null
+        ? DateFormat('dd.MM.yyyy HH:mm').format(request.requestedAt!.toDate())
         : '';
 
     return Card(
@@ -173,7 +194,7 @@ class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScr
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    req.tourTitle,
+                    request.tourTitle,
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
@@ -186,14 +207,14 @@ class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScr
             ),
             const SizedBox(width: 12),
             OutlinedButton.icon(
-              onPressed: () => _reject(req),
+              onPressed: () => onReject(request),
               icon: const Icon(Icons.close, size: 18),
               label: const Text(AppStrings.reject),
               style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
             ),
             const SizedBox(width: 8),
             ElevatedButton.icon(
-              onPressed: () => _approve(req),
+              onPressed: () => onApprove(request),
               icon: const Icon(Icons.check, size: 18),
               label: const Text(AppStrings.confirm),
               style: ElevatedButton.styleFrom(

@@ -4,7 +4,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/user_model.dart';
-import '../../controllers/sa_user_controller.dart';
+import '../../../users/presentation/controllers/user_controller.dart';
+import '../../../companies/presentation/controllers/company_controller.dart';
 
 class UserListScreen extends StatelessWidget {
   const UserListScreen({super.key});
@@ -25,7 +26,7 @@ class UserListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<SAUserController>();
+    final controller = Get.find<UserController>();
 
     return Scaffold(
       appBar: AppBar(title: const Text(AppStrings.userList)),
@@ -105,7 +106,7 @@ class UserListScreen extends StatelessWidget {
                             DataCell(Text(u.email)),
                             DataCell(Text(u.phone.isEmpty ? '-' : u.phone)),
                             DataCell(_roleChip(u.role)),
-                            DataCell(Text(controller.getCompanyName(u.companyId))),
+                            DataCell(Text(controller.companyNameOf(u.companyId))),
                             DataCell(_statusChip(!u.isDeleted)),
                             DataCell(
                               Row(
@@ -120,7 +121,7 @@ class UserListScreen extends StatelessWidget {
                                         ? AppStrings.activate
                                         : AppStrings.deactivate,
                                     onPressed: () =>
-                                        controller.setUserActive(u.uid!, isActive: u.isDeleted),
+                                        controller.toggleUserActive(u.uid!, isActive: u.isDeleted),
                                     icon: Icon(
                                       u.isDeleted ? Icons.visibility : Icons.visibility_off,
                                       color: u.isDeleted ? AppColors.success : AppColors.warning,
@@ -130,7 +131,8 @@ class UserListScreen extends StatelessWidget {
                                     tooltip: AppStrings.delete,
                                     onPressed: u.isDeleted
                                         ? null
-                                        : () => controller.setUserActive(u.uid!, isActive: false),
+                                        : () =>
+                                              controller.toggleUserActive(u.uid!, isActive: false),
                                     icon: const Icon(Icons.delete_outline, color: AppColors.error),
                                   ),
                                 ],
@@ -150,7 +152,7 @@ class UserListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFilters(SAUserController controller) {
+  Widget _buildFilters(UserController controller) {
     return Row(
       children: [
         SizedBox(
@@ -167,16 +169,16 @@ class UserListScreen extends StatelessWidget {
         ),
         const SizedBox(width: 16),
         Obx(
-          () => DropdownButton<String?>(
+          () => DropdownButton<String>(
             value: controller.selectedRole.value,
             hint: const Text('Tüm Roller'),
             items: [
-              const DropdownMenuItem(value: null, child: Text('Tüm Roller')),
+              const DropdownMenuItem(value: '', child: Text('Tüm Roller')),
               ..._roleLabels.entries.map(
                 (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
               ),
             ],
-            onChanged: (val) => controller.selectedRole.value = val,
+            onChanged: (val) => controller.selectedRole.value = val ?? '',
           ),
         ),
         const SizedBox(width: 16),
@@ -196,7 +198,7 @@ class UserListScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showEditDialog(BuildContext context, SAUserController controller, UserModel user) {
+  Future<void> _showEditDialog(BuildContext context, UserController controller, UserModel user) {
     return showDialog<void>(
       context: context,
       builder: (_) => _EditUserDialog(controller: controller, user: user),
@@ -237,7 +239,7 @@ class UserListScreen extends StatelessWidget {
 }
 
 class _EditUserDialog extends StatefulWidget {
-  final SAUserController controller;
+  final UserController controller;
   final UserModel user;
 
   const _EditUserDialog({required this.controller, required this.user});
@@ -252,6 +254,7 @@ class _EditUserDialogState extends State<_EditUserDialog> {
   late final TextEditingController _tcNoCtrl;
   late final TextEditingController _selectedCityCtrl;
   late final TextEditingController _profileImageCtrl;
+  late final CompanyController _cc;
   late String _selectedRole;
   late String _selectedCompanyId;
 
@@ -265,6 +268,7 @@ class _EditUserDialogState extends State<_EditUserDialog> {
     _tcNoCtrl = TextEditingController(text: widget.user.tcNo);
     _selectedCityCtrl = TextEditingController(text: widget.user.selectedCity);
     _profileImageCtrl = TextEditingController(text: widget.user.profileImage ?? '');
+    _cc = Get.find<CompanyController>();
     _selectedRole = widget.user.role == 'super_admin' ? 'admin' : widget.user.role;
     _selectedCompanyId = widget.user.companyId;
   }
@@ -319,7 +323,7 @@ class _EditUserDialogState extends State<_EditUserDialog> {
                 decoration: const InputDecoration(labelText: 'Şirket'),
                 items: [
                   const DropdownMenuItem<String>(value: '', child: Text('Şirket atanmadı')),
-                  ...widget.controller.companies.map(
+                  ...[..._cc.activeCompanies, ..._cc.passiveCompanies].map(
                     (company) => DropdownMenuItem<String>(
                       value: company.id,
                       child: Text(company.companyName),
@@ -336,18 +340,19 @@ class _EditUserDialogState extends State<_EditUserDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text(AppStrings.cancel)),
         FilledButton(
           onPressed: () async {
-            await widget.controller.updateUser(
-              uid: widget.user.uid!,
-              fullName: _fullNameCtrl.text.trim(),
-              phone: _phoneCtrl.text.trim(),
-              role: _selectedRole,
-              companyId: _selectedCompanyId,
-              tcNo: _tcNoCtrl.text.trim(),
-              selectedCity: _selectedCityCtrl.text.trim(),
-              profileImage: _profileImageCtrl.text.trim().isEmpty
-                  ? null
-                  : _profileImageCtrl.text.trim(),
-            );
+            // UserController.updateUser Map<String, dynamic> alacak sekilde guncellendi
+            final data = <String, dynamic>{
+              'fullName': _fullNameCtrl.text.trim(),
+              'phone': _phoneCtrl.text.trim(),
+              'role': _selectedRole,
+              'companyId': _selectedCompanyId,
+              'tcNo': _tcNoCtrl.text.trim(),
+              'selectedCity': _selectedCityCtrl.text.trim(),
+            };
+            if (_profileImageCtrl.text.trim().isNotEmpty) {
+              data['profileImage'] = _profileImageCtrl.text.trim();
+            }
+            await widget.controller.updateUser(widget.user.uid!, data);
             if (!context.mounted) return;
             Navigator.pop(context);
           },

@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../services/super_admin_service.dart';
+import '../../../tours/presentation/controllers/tour_controller.dart';
 
 class SaUpdateTourScreen extends StatefulWidget {
   final String tourId;
@@ -14,7 +14,7 @@ class SaUpdateTourScreen extends StatefulWidget {
 }
 
 class _SaUpdateTourScreenState extends State<SaUpdateTourScreen> {
-  final _service = SuperAdminService();
+  late final TourController _tc;
   final _formKey = GlobalKey<FormState>();
 
   final _titleCtrl = TextEditingController();
@@ -34,7 +34,6 @@ class _SaUpdateTourScreenState extends State<SaUpdateTourScreen> {
   final List<int> _selectedDepartureDays = [];
   final List<DateTime> _selectedDates = [];
   String _selectedRegion = 'Marmara';
-  bool _isLoading = false;
   bool _isDataLoaded = false;
 
   static const _regions = [
@@ -62,41 +61,39 @@ class _SaUpdateTourScreenState extends State<SaUpdateTourScreen> {
   @override
   void initState() {
     super.initState();
+    _tc = Get.find<TourController>();
     _loadTourData();
   }
 
   Future<void> _loadTourData() async {
-    try {
-      final tour = await _service.getTour(widget.tourId);
-      if (tour == null || !mounted) return;
+    // Controller hata snackbar'\u0131n\u0131 g\u00f6sterir; null d\u00f6nd\u00fc\u011f\u00fcnde sessizce durur.
+    final tour = await _tc.getTour(widget.tourId);
+    if (tour == null || !mounted) return;
 
-      _titleCtrl.text = tour.title;
-      _descriptionCtrl.text = tour.description;
-      _extraDetailCtrl.text = tour.extraDetail;
-      _priceCtrl.text = tour.price.toStringAsFixed(0);
-      _capacityCtrl.text = tour.capacity.toString();
-      _cityCtrl.text = tour.city;
-      _imageUrlCtrl.text = tour.imageUrl;
-      _guideNameCtrl.text = tour.guideName ?? '';
-      _departureTimeCtrl.text = tour.departureTime;
-      _driverNameCtrl.text = tour.busInfo.driverName;
-      _driverPhoneCtrl.text = tour.busInfo.phoneNumber;
-      _plateCtrl.text = tour.busInfo.plate;
-      _busCapacityCtrl.text = tour.busInfo.capacity.toString();
+    _titleCtrl.text = tour.title;
+    _descriptionCtrl.text = tour.description;
+    _extraDetailCtrl.text = tour.extraDetail;
+    _priceCtrl.text = tour.price.toStringAsFixed(0);
+    _capacityCtrl.text = tour.capacity.toString();
+    _cityCtrl.text = tour.city;
+    _imageUrlCtrl.text = tour.imageUrl;
+    _guideNameCtrl.text = tour.guideName ?? '';
+    _departureTimeCtrl.text = tour.departureTime;
+    _driverNameCtrl.text = tour.busInfo.driverName;
+    _driverPhoneCtrl.text = tour.busInfo.phoneNumber;
+    _plateCtrl.text = tour.busInfo.plate;
+    _busCapacityCtrl.text = tour.busInfo.capacity.toString();
 
-      setState(() {
-        _selectedRegion = _regions.contains(tour.region) ? tour.region : 'Marmara';
-        _selectedDepartureDays
-          ..clear()
-          ..addAll(tour.departureDays);
-        _selectedDates
-          ..clear()
-          ..addAll(tour.departureDates ?? []);
-        _isDataLoaded = true;
-      });
-    } catch (e) {
-      Get.snackbar('Hata', 'Tur verileri yüklenemedi: $e', snackPosition: SnackPosition.BOTTOM);
-    }
+    setState(() {
+      _selectedRegion = _regions.contains(tour.region) ? tour.region : 'Marmara';
+      _selectedDepartureDays
+        ..clear()
+        ..addAll(tour.departureDays);
+      _selectedDates
+        ..clear()
+        ..addAll(tour.departureDates ?? []);
+      _isDataLoaded = true;
+    });
   }
 
   @override
@@ -119,38 +116,29 @@ class _SaUpdateTourScreenState extends State<SaUpdateTourScreen> {
 
   Future<void> _handleUpdate() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final data = {
-        'title': _titleCtrl.text.trim(),
-        'description': _descriptionCtrl.text.trim(),
-        'extraDetail': _extraDetailCtrl.text.trim(),
-        'price': double.tryParse(_priceCtrl.text) ?? 0,
-        'capacity': int.tryParse(_capacityCtrl.text) ?? 0,
-        'city': _cityCtrl.text.trim(),
-        'region': _selectedRegion,
-        'imageUrl': _imageUrlCtrl.text.trim(),
-        'guideName': _guideNameCtrl.text.trim().isEmpty ? null : _guideNameCtrl.text.trim(),
-        'departureTime': _departureTimeCtrl.text.trim(),
-        'departureDays': _selectedDepartureDays,
-        'departureDates': _selectedDates.map((d) => DateTime(d.year, d.month, d.day)).toList(),
-        'busInfo': {
-          'driverName': _driverNameCtrl.text.trim(),
-          'phoneNumber': _driverPhoneCtrl.text.trim(),
-          'plate': _plateCtrl.text.trim(),
-          'capacity': int.tryParse(_busCapacityCtrl.text) ?? 0,
-        },
-      };
-
-      await _service.updateTour(widget.tourId, data);
-      Get.snackbar('Başarılı', 'Tur güncellendi.', snackPosition: SnackPosition.BOTTOM);
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
-    } finally {
-      setState(() => _isLoading = false);
-    }
+    // Controller isLoading'i ve hata/başarı snackbar'\u0131n\u0131 yönetir.
+    final data = {
+      'title': _titleCtrl.text.trim(),
+      'description': _descriptionCtrl.text.trim(),
+      'extraDetail': _extraDetailCtrl.text.trim(),
+      'price': double.tryParse(_priceCtrl.text) ?? 0,
+      'capacity': int.tryParse(_capacityCtrl.text) ?? 0,
+      'city': _cityCtrl.text.trim(),
+      'region': _selectedRegion,
+      'imageUrl': _imageUrlCtrl.text.trim(),
+      'guideName': _guideNameCtrl.text.trim().isEmpty ? null : _guideNameCtrl.text.trim(),
+      'departureTime': _departureTimeCtrl.text.trim(),
+      'departureDays': _selectedDepartureDays,
+      'departureDates': _selectedDates.map((d) => DateTime(d.year, d.month, d.day)).toList(),
+      'busInfo': {
+        'driverName': _driverNameCtrl.text.trim(),
+        'phoneNumber': _driverPhoneCtrl.text.trim(),
+        'plate': _plateCtrl.text.trim(),
+        'capacity': int.tryParse(_busCapacityCtrl.text) ?? 0,
+      },
+    };
+    final ok = await _tc.updateTour(widget.tourId, data);
+    if (ok && mounted) Navigator.pop(context);
   }
 
   Future<void> _pickDate() async {
@@ -202,29 +190,32 @@ class _SaUpdateTourScreenState extends State<SaUpdateTourScreen> {
                     const SizedBox(height: 16),
                     _buildDepartureCard(),
                     const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _handleUpdate,
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.edit),
-                        label: Text(_isLoading ? 'Güncelleniyor...' : AppStrings.update),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    Obx(() {
+                      final loading = _tc.isLoading.value;
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: loading ? null : _handleUpdate,
+                          icon: loading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.edit),
+                          label: Text(loading ? 'Güncelleniyor...' : AppStrings.update),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    }),
                     const SizedBox(height: 40),
                   ],
                 ),

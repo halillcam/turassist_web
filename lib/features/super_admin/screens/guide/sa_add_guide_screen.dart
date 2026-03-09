@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../services/super_admin_service.dart';
+import '../../../guides/presentation/controllers/guide_controller.dart';
 
 class SaAddGuideScreen extends StatefulWidget {
   final String tourId;
@@ -16,18 +16,23 @@ class SaAddGuideScreen extends StatefulWidget {
 }
 
 class _SaAddGuideScreenState extends State<SaAddGuideScreen> {
-  final _service = SuperAdminService();
+  late final GuideController _gc;
   final _formKey = GlobalKey<FormState>();
   final _guideIdCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _fullNameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  bool _isLoading = false;
 
   String get _normalizedGuideId => AuthService.normalizeGuideId(_guideIdCtrl.text);
 
   String get _generatedLoginEmail =>
       _normalizedGuideId.isEmpty ? '' : AuthService.buildGuideLoginEmail(_normalizedGuideId);
+
+  @override
+  void initState() {
+    super.initState();
+    _gc = Get.find<GuideController>();
+  }
 
   @override
   void dispose() {
@@ -40,43 +45,20 @@ class _SaAddGuideScreenState extends State<SaAddGuideScreen> {
 
   Future<void> _handleAdd() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final guideId = _normalizedGuideId;
-      final password = _passwordCtrl.text.trim();
-
-      await _service.addGuideToTour(
-        guideId: guideId,
-        password: password,
-        fullName: _fullNameCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
-        tourId: widget.tourId,
-        companyId: widget.companyId,
-      );
-
-      if (!mounted) return;
-      await _showCredentialsDialog(guideId: guideId, password: password);
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      Get.snackbar('Hata', _friendlyError(e), snackPosition: SnackPosition.BOTTOM);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  String _friendlyError(Object error) {
-    final message = error.toString();
-    if (message.contains('email-already-in-use')) {
-      return 'Bu Guide ID zaten kullanılıyor.';
-    }
-    if (message.contains('weak-password')) {
-      return 'Şifre en az 6 karakter olmalıdır.';
-    }
-    if (message.contains('invalid-email')) {
-      return 'Guide ID formatı geçersiz.';
-    }
-    return 'İşlem başarısız: $message';
+    // Controller hatası dahilen yönetir, isLoading reaktif güncellenir.
+    final guideId = _normalizedGuideId;
+    final password = _passwordCtrl.text.trim();
+    final ok = await _gc.addGuide(
+      guideId: guideId,
+      password: password,
+      fullName: _fullNameCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
+      tourId: widget.tourId,
+      companyId: widget.companyId,
+    );
+    if (!ok || !mounted) return;
+    await _showCredentialsDialog(guideId: guideId, password: password);
+    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _showCredentialsDialog({required String guideId, required String password}) {
@@ -213,26 +195,32 @@ class _SaAddGuideScreenState extends State<SaAddGuideScreen> {
                     },
                   ),
                   const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _handleAdd,
-                      icon: _isLoading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.admin_panel_settings),
-                      label: Text(_isLoading ? 'Ekleniyor...' : AppStrings.add),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  Obx(() {
+                    final loading = _gc.isLoading.value;
+                    return SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: loading ? null : _handleAdd,
+                        icon: loading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.admin_panel_settings),
+                        label: Text(loading ? 'Ekleniyor...' : AppStrings.add),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
                 ],
               ),
             ),

@@ -1,8 +1,16 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
-import '../services/admin_tour_service.dart';
 
+import '../../../core/services/firestore_service.dart';
+
+/// Admin panelinin navigasyon durumunu ve şirket kimliğini yöneten controller.
+///
+/// Şirket kimliği, AdminTourService yerine doğrudan [FirestoreService] ile
+/// `users/{uid}.companyId` alanından okunur.
 class AdminDashboardController extends GetxController {
-  final _service = AdminTourService();
+  final FirestoreService _db;
+
+  AdminDashboardController({required FirestoreService db}) : _db = db;
 
   final selectedIndex = 0.obs;
   final companyId = RxnString();
@@ -11,16 +19,21 @@ class AdminDashboardController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    loadCompanyId();
+    _loadCompanyId();
   }
 
-  Future<void> loadCompanyId() async {
-    final id = await _service.getCurrentCompanyId();
-    companyId.value = id;
+  Future<void> _loadCompanyId() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      isLoading.value = false;
+      return;
+    }
+    final doc = await _db.getDocument('users', uid);
+    if (doc.exists && doc.data() != null) {
+      companyId.value = doc.data()!['companyId'] as String?;
+    }
     isLoading.value = false;
   }
 
-  void setSelectedIndex(int index) {
-    selectedIndex.value = index;
-  }
+  void setSelectedIndex(int index) => selectedIndex.value = index;
 }

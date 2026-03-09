@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/feedback_model.dart';
-import '../../controllers/sa_feedback_controller.dart';
+import '../../../feedback/presentation/controllers/feedback_controller.dart';
 
 class SuperAdminFeedbackScreen extends StatefulWidget {
   const SuperAdminFeedbackScreen({super.key});
@@ -17,8 +17,15 @@ class _SuperAdminFeedbackScreenState extends State<SuperAdminFeedbackScreen> {
   int _selectedTab = 0;
 
   @override
+  void initState() {
+    super.initState();
+    // Binding tarafından enjekte edilen FeedbackController üzerinden SA modu başlatılır
+    Get.find<FeedbackController>().watchAllFeedbacks();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final ctrl = Get.find<SAFeedbackController>();
+    final ctrl = Get.find<FeedbackController>();
     final title = _selectedTab == 0 ? AppStrings.pendingFeedback : AppStrings.resolvedFeedback;
 
     return Scaffold(

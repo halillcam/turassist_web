@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../features/auth/screens/login_screen.dart';
+import '../../features/auth/presentation/bindings/auth_binding.dart';
 import '../../features/admin/screens/admin_dashboard_screen.dart';
 import '../../features/admin/screens/tours/tour_detail_screen.dart';
 import '../../features/admin/screens/tours/update_tour_screen.dart';
 import '../../features/admin/screens/participants/add_participant_screen.dart';
 import '../../features/admin/screens/participants/participants_list_screen.dart';
 import '../../features/admin/screens/guide/add_guide_screen.dart';
+import '../../features/admin/presentation/bindings/admin_dashboard_binding.dart';
 import '../../features/super_admin/screens/super_admin_dashboard_screen.dart';
 import '../../features/super_admin/screens/companies/update_company_screen.dart';
 import '../../features/super_admin/screens/tours/super_admin_tour_detail_screen.dart';
@@ -15,6 +18,14 @@ import '../../features/super_admin/screens/participants/sa_add_participant_scree
 import '../../features/super_admin/screens/participants/sa_participants_list_screen.dart';
 import '../../features/super_admin/screens/guide/sa_add_guide_screen.dart';
 import '../../features/super_admin/screens/users/sa_add_user_screen.dart';
+import '../../features/super_admin/presentation/bindings/super_admin_dashboard_binding.dart';
+import '../../features/admin/screens/tours/tour_communication_screen.dart';
+import '../../features/tours/presentation/screens/tours_list_screen.dart';
+import '../../features/tours/presentation/screens/tour_schedule_screen.dart';
+import '../../features/tours/presentation/screens/tour_detail_screen.dart' as unified;
+import '../../features/tours/presentation/screens/add_tour_screen.dart';
+import '../../features/tours/presentation/screens/update_tour_screen.dart' as unified;
+import '../../features/tours/presentation/bindings/tour_binding.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -36,16 +47,36 @@ class AppRoutes {
   static const String saAddGuide = '/super-admin/add-guide';
   static const String saAddUser = '/super-admin/add-user';
 
+  // ─── Unified Tour Routes ─────────────────────────────────────────────────
+  static const String toursList = '/tours';
+  static const String toursSchedule = '/tours/schedule';
+  static const String toursDetail = '/tours/detail';
+  static const String toursAdd = '/tours/add';
+  static const String toursUpdate = '/tours/update';
+  static const String tourCommunication = '/admin/tour-communication';
+
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case login:
-        return MaterialPageRoute(builder: (_) => const LoginScreen());
+        return GetPageRoute(
+          settings: settings,
+          binding: AuthBinding(),
+          page: () => const LoginScreen(),
+        );
 
       case adminDashboard:
-        return MaterialPageRoute(builder: (_) => const AdminDashboardScreen());
+        return GetPageRoute(
+          settings: settings,
+          binding: AdminDashboardBinding(),
+          page: () => const AdminDashboardScreen(),
+        );
 
       case superAdminDashboard:
-        return MaterialPageRoute(builder: (_) => const SuperAdminDashboardScreen());
+        return GetPageRoute(
+          settings: settings,
+          binding: SuperAdminDashboardBinding(),
+          page: () => const SuperAdminDashboardScreen(),
+        );
 
       case tourDetail:
         final tourDetailArgs = settings.arguments;
@@ -160,6 +191,65 @@ class AppRoutes {
 
       case saAddUser:
         return MaterialPageRoute(builder: (_) => const SaAddUserScreen());
+
+      // ─── Unified Tour Routes ──────────────────────────────────────────────
+      case toursList:
+        final companyId = settings.arguments as String?;
+        return GetPageRoute(
+          settings: settings,
+          binding: TourBinding(),
+          page: () => ToursListScreen(companyId: companyId),
+        );
+
+      case toursSchedule:
+        final scheduleArgs = settings.arguments as Map<String, dynamic>;
+        return GetPageRoute(
+          settings: settings,
+          binding: TourBinding(),
+          page: () => TourScheduleScreen(
+            companyId: scheduleArgs['companyId'] as String,
+            representativeTourId: scheduleArgs['representativeTourId'] as String,
+            seriesId: scheduleArgs['seriesId'] as String?,
+            isDeleted: (scheduleArgs['isDeleted'] as bool?) ?? false,
+          ),
+        );
+
+      case toursDetail:
+        final detailArgs = settings.arguments as Map<String, dynamic>;
+        return GetPageRoute(
+          settings: settings,
+          binding: TourBinding(),
+          page: () => unified.TourDetailScreen(
+            tourId: detailArgs['tourId'] as String,
+            departureDate: detailArgs['departureDate'] as DateTime?,
+          ),
+        );
+
+      case toursAdd:
+        final addCompanyId = settings.arguments as String;
+        return GetPageRoute(
+          settings: settings,
+          binding: TourBinding(),
+          page: () => AddTourScreen(companyId: addCompanyId),
+        );
+
+      case toursUpdate:
+        final updateTourId = settings.arguments as String;
+        return GetPageRoute(
+          settings: settings,
+          binding: TourBinding(),
+          page: () => unified.UpdateTourScreen(tourId: updateTourId),
+        );
+
+      case tourCommunication:
+        final commArgs = settings.arguments as Map<String, dynamic>;
+        return MaterialPageRoute(
+          builder: (_) => TourCommunicationScreen(
+            tourId: commArgs['tourId'] as String,
+            tourTitle: commArgs['tourTitle'] as String,
+            initialTabIndex: (commArgs['initialTabIndex'] as int?) ?? 0,
+          ),
+        );
 
       default:
         return MaterialPageRoute(builder: (_) => const LoginScreen());

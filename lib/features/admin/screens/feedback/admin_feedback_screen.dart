@@ -1,9 +1,13 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../controllers/admin_feedback_controller.dart';
+import '../../../../features/feedback/presentation/controllers/feedback_controller.dart';
 
+/// Admin tarafindan Super Admin'e geri bildirim gonderilen ekran.
+///
+/// [FeedbackController] uzerinden calisir; eski AdminFeedbackController
+/// referansi yoktur.
 class AdminFeedbackScreen extends StatefulWidget {
   final String companyId;
 
@@ -14,7 +18,7 @@ class AdminFeedbackScreen extends StatefulWidget {
 }
 
 class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
-  late final AdminFeedbackController _controller;
+  late final FeedbackController _controller;
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
@@ -22,7 +26,7 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = Get.find<AdminFeedbackController>();
+    _controller = Get.find<FeedbackController>();
   }
 
   @override
@@ -34,27 +38,14 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
 
   Future<void> _handleSend() async {
     if (!_formKey.currentState!.validate()) return;
-
-    try {
-      await _controller.sendFeedback(
-        companyId: widget.companyId,
-        title: _titleCtrl.text.trim(),
-        description: _descriptionCtrl.text.trim(),
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Geri bildirim gönderildi.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+    final sent = await _controller.sendFeedback(
+      companyId: widget.companyId,
+      title: _titleCtrl.text.trim(),
+      description: _descriptionCtrl.text.trim(),
+    );
+    if (sent) {
       _titleCtrl.clear();
       _descriptionCtrl.clear();
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error));
     }
   }
 
@@ -83,7 +74,7 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Super Admin\'e sorun veya durum bildirimi gönderin.',
+              'Super Admin\'e sorun veya durum bildirimi gonderin.',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 24),
@@ -96,21 +87,25 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
                     children: [
                       TextFormField(
                         controller: _titleCtrl,
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null,
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null,
                         decoration: InputDecoration(
-                          labelText: 'Konu Başlığı',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          labelText: 'Konu Basligi',
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _descriptionCtrl,
                         maxLines: 5,
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null,
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null,
                         decoration: InputDecoration(
-                          labelText: 'Açıklama',
+                          labelText: 'Aciklama',
                           alignLabelWithHint: true,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -118,23 +113,26 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
                         () => Align(
                           alignment: Alignment.centerRight,
                           child: ElevatedButton.icon(
-                            onPressed: _controller.isLoading.value ? null : _handleSend,
+                            onPressed:
+                                _controller.isLoading.value ? null : _handleSend,
                             icon: _controller.isLoading.value
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
                                     child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
+                                        strokeWidth: 2, color: Colors.white),
                                   )
                                 : const Icon(Icons.send),
-                            label: Text(_controller.isLoading.value ? 'Gönderiliyor...' : 'Gönder'),
+                            label: Text(_controller.isLoading.value
+                                ? 'Gonderiliyor...'
+                                : 'Gonder'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
                             ),
                           ),
                         ),

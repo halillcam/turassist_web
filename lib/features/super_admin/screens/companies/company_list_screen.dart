@@ -4,7 +4,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/company_model.dart';
-import '../../controllers/company_controller.dart';
+import '../../../companies/presentation/controllers/company_controller.dart';
 
 class CompanyListScreen extends StatefulWidget {
   const CompanyListScreen({super.key});

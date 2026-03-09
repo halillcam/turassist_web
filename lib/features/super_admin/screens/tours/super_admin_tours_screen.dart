@@ -5,9 +5,9 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/company_model.dart';
-import '../../../../core/models/tour_model.dart';
-import '../../controllers/sa_tour_controller.dart';
-import 'sa_tour_schedule_screen.dart';
+import '../../../companies/presentation/controllers/company_controller.dart';
+import '../../../tours/domain/entities/tour_entity.dart';
+import '../../../tours/presentation/controllers/tour_controller.dart';
 
 class SuperAdminToursScreen extends StatefulWidget {
   const SuperAdminToursScreen({super.key});
@@ -19,11 +19,25 @@ class SuperAdminToursScreen extends StatefulWidget {
 class _SuperAdminToursScreenState extends State<SuperAdminToursScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late final TourController _tc;
+  late final CompanyController _cc;
+  // Seçili şirket reaktif xolarak tutulur; Obx ile FAB ve dropdown yönetilir.
+  final _selectedCompanyId = Rxn<String>();
+
+  void _onCompanySelected(String? companyId) {
+    _selectedCompanyId.value = companyId;
+    if (companyId != null) {
+      _tc.loadActiveTours(companyId);
+      _tc.loadDeletedTours(companyId);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tc = Get.find<TourController>();
+    _cc = Get.find<CompanyController>();
   }
 
   @override
@@ -34,8 +48,6 @@ class _SuperAdminToursScreenState extends State<SuperAdminToursScreen>
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<SATourController>();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text(AppStrings.tours),
@@ -49,25 +61,26 @@ class _SuperAdminToursScreenState extends State<SuperAdminToursScreen>
       ),
       body: Column(
         children: [
-          _buildCompanySelector(controller),
+          _buildCompanySelector(),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                Obx(() => _buildTourList(controller.activeTours.toList(), 'Aktif tur bulunmuyor.')),
-                Obx(
-                  () => _buildTourList(controller.deletedTours.toList(), 'Pasif tur bulunmuyor.'),
-                ),
+                Obx(() => _buildTourList(_tc.activeTours.toList(), 'Aktif tur bulunmuyor.')),
+                Obx(() => _buildTourList(_tc.deletedTours.toList(), 'Pasif tur bulunmuyor.')),
               ],
             ),
           ),
         ],
       ),
       floatingActionButton: Obx(() {
-        final companyId = controller.selectedCompanyId.value;
-        if (companyId == null) return const SizedBox.shrink();
+        if (_selectedCompanyId.value == null) return const SizedBox.shrink();
         return FloatingActionButton.extended(
-          onPressed: () => Navigator.pushNamed(context, AppRoutes.saAddTour, arguments: companyId),
+          onPressed: () => Navigator.pushNamed(
+            context,
+            AppRoutes.saAddTour,
+            arguments: _selectedCompanyId.value,
+          ),
           icon: const Icon(Icons.add),
           label: const Text('Tur Ekle'),
           backgroundColor: AppColors.primary,
@@ -77,12 +90,12 @@ class _SuperAdminToursScreenState extends State<SuperAdminToursScreen>
     );
   }
 
-  Widget _buildCompanySelector(SATourController controller) {
+  Widget _buildCompanySelector() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       child: Obx(() {
-        final companies = controller.companies;
-        final selected = controller.selectedCompanyId.value;
+        final companies = _cc.activeCompanies;
+        final selected = _selectedCompanyId.value;
 
         return Row(
           children: [
@@ -106,7 +119,7 @@ class _SuperAdminToursScreenState extends State<SuperAdminToursScreen>
                 items: companies.map((CompanyModel c) {
                   return DropdownMenuItem(value: c.id, child: Text(c.companyName));
                 }).toList(),
-                onChanged: (val) => controller.selectCompany(val),
+                onChanged: _onCompanySelected,
               ),
             ),
           ],
@@ -115,7 +128,7 @@ class _SuperAdminToursScreenState extends State<SuperAdminToursScreen>
     );
   }
 
-  Widget _buildTourList(List<TourModel> tours, String emptyText) {
+  Widget _buildTourList(List<TourEntity> tours, String emptyText) {
     if (tours.isEmpty) {
       return Center(
         child: Column(
@@ -136,9 +149,9 @@ class _SuperAdminToursScreenState extends State<SuperAdminToursScreen>
     );
   }
 
-  static List<_TourGroup> _groupTours(List<TourModel> tours) {
-    final Map<String, List<TourModel>> bySeriesId = {};
-    final List<TourModel> standalone = [];
+  static List<_TourGroup> _groupTours(List<TourEntity> tours) {
+    final Map<String, List<TourEntity>> bySeriesId = {};
+    final List<TourEntity> standalone = [];
 
     for (final tour in tours) {
       if (tour.seriesId != null && tour.seriesId!.isNotEmpty) {
@@ -170,11 +183,11 @@ class _SuperAdminToursScreenState extends State<SuperAdminToursScreen>
 }
 
 class _TourGroup {
-  final List<TourModel> instances;
+  final List<TourEntity> instances;
 
   _TourGroup({required this.instances});
 
-  TourModel get representative => instances.first;
+  TourEntity get representative => instances.first;
 
   List<DateTime> get allDates {
     final dates = <DateTime>{};
@@ -327,20 +340,18 @@ class _TourCard extends StatelessWidget {
     );
   }
 
-  Future<void> _handleTap(BuildContext context) async {
-    final representative = group.representative;
-    final tourId = representative.id;
-    if (tourId == null) return;
-    await Navigator.push(
+  void _handleTap(BuildContext context) {
+    final rep = group.representative;
+    // SA için birleşik tur takvimi ekranına yönlendirilir.
+    Navigator.pushNamed(
       context,
-      MaterialPageRoute(
-        builder: (_) => SaTourScheduleScreen(
-          companyId: representative.companyId,
-          representativeTourId: tourId,
-          seriesId: representative.seriesId,
-          isDeleted: representative.isDeleted,
-        ),
-      ),
+      AppRoutes.toursSchedule,
+      arguments: {
+        'companyId': rep.companyId,
+        'representativeTourId': rep.id,
+        'seriesId': rep.seriesId,
+        'isDeleted': rep.isDeleted,
+      },
     );
   }
 
@@ -353,7 +364,7 @@ class _TourCard extends StatelessWidget {
     );
   }
 
-  static Widget _departureDaysChip(TourModel tour) {
+  static Widget _departureDaysChip(TourEntity tour) {
     if (tour.departureDays.isEmpty) return const SizedBox.shrink();
     final label = tour.departureDays.map((d) => _dayLabels[d] ?? '').join(', ');
     return _chip(AppColors.info, label);

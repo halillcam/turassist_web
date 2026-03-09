@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/models/tour_communication_item.dart';
-import '../../controllers/admin_tour_controller.dart';
+import '../../../communication/presentation/controllers/communication_controller.dart';
 
 class TourCommunicationScreen extends StatefulWidget {
   final String tourId;
@@ -24,13 +24,14 @@ class TourCommunicationScreen extends StatefulWidget {
 
 class _TourCommunicationScreenState extends State<TourCommunicationScreen>
     with SingleTickerProviderStateMixin {
-  late final AdminTourController _controller;
+  late final CommunicationController _controller;
   late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _controller = Get.find<AdminTourController>();
+    // Binding tarafından enjekte edilen CommunicationController alınır
+    _controller = Get.find<CommunicationController>();
     _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTabIndex);
   }
 
@@ -57,13 +58,13 @@ class _TourCommunicationScreenState extends State<TourCommunicationScreen>
         controller: _tabController,
         children: [
           _CommunicationList(
-            stream: _controller.streamTourMessages(widget.tourId),
+            stream: _controller.streamMessages(widget.tourId),
             emptyText: 'Bu tur için henüz mesaj yok.',
             emptyIcon: Icons.forum_outlined,
             showSender: true,
           ),
           _CommunicationList(
-            stream: _controller.streamTourAnnouncements(widget.tourId),
+            stream: _controller.streamAnnouncements(widget.tourId),
             emptyText: 'Bu tur için henüz duyuru yok.',
             emptyIcon: Icons.campaign_outlined,
             showSender: false,

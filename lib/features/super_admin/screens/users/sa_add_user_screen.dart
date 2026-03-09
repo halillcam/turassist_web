@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../controllers/sa_user_controller.dart';
+import '../../../companies/presentation/controllers/company_controller.dart';
+import '../../../users/presentation/controllers/user_controller.dart';
 
 class SaAddUserScreen extends StatefulWidget {
   const SaAddUserScreen({super.key});
@@ -21,10 +22,19 @@ class _SaAddUserScreenState extends State<SaAddUserScreen> {
 
   String _selectedRole = 'customer';
   String? _selectedCompanyId;
-  bool _isLoading = false;
   bool _obscurePassword = true;
 
+  late final UserController _uc;
+  late final CompanyController _cc;
+
   static const _roles = [('customer', 'Müşteri'), ('guide', 'Rehber'), ('admin', 'Admin')];
+
+  @override
+  void initState() {
+    super.initState();
+    _uc = Get.find<UserController>();
+    _cc = Get.find<CompanyController>();
+  }
 
   @override
   void dispose() {
@@ -38,24 +48,17 @@ class _SaAddUserScreenState extends State<SaAddUserScreen> {
 
   Future<void> _handleAdd() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    try {
-      final controller = Get.find<SAUserController>();
-      await controller.addUser(
-        email: _emailCtrl.text.trim(),
-        password: _passwordCtrl.text.trim(),
-        fullName: _fullNameCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
-        role: _selectedRole,
-        companyId: _selectedCompanyId ?? '',
-        tcNo: _tcNoCtrl.text.trim(),
-      );
-      if (mounted) Navigator.pop(context);
-    } catch (_) {
-      // Hata snackbar'ı controller tarafından gösterildi.
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    // Controller isLoading'i reaktif olarak yönetir.
+    final ok = await _uc.addUser(
+      email: _emailCtrl.text.trim(),
+      password: _passwordCtrl.text.trim(),
+      fullName: _fullNameCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
+      role: _selectedRole,
+      companyId: _selectedCompanyId ?? '',
+      tcNo: _tcNoCtrl.text.trim(),
+    );
+    if (ok && mounted) Navigator.pop(context);
   }
 
   @override
@@ -163,56 +166,55 @@ class _SaAddUserScreenState extends State<SaAddUserScreen> {
                     const SizedBox(height: 12),
 
                     // Şirket seçimi
-                    GetBuilder<SAUserController>(
-                      builder: (ctrl) {
-                        return DropdownButtonFormField<String?>(
-                          initialValue: _selectedCompanyId,
-                          decoration: InputDecoration(
-                            labelText: 'Şirket',
-                            isDense: true,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    Obx(() {
+                      return DropdownButtonFormField<String?>(
+                        initialValue: _selectedCompanyId,
+                        decoration: InputDecoration(
+                          labelText: 'Şirket',
+                          isDense: true,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Şirket seçilmedi'),
                           ),
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('Şirket seçilmedi'),
-                            ),
-                            ...ctrl.companies.map(
-                              (c) => DropdownMenuItem<String?>(
-                                value: c.id,
-                                child: Text(c.companyName),
-                              ),
-                            ),
-                          ],
-                          onChanged: (val) => setState(() => _selectedCompanyId = val),
-                        );
-                      },
-                    ),
+                          ..._cc.activeCompanies.map(
+                            (c) =>
+                                DropdownMenuItem<String?>(value: c.id, child: Text(c.companyName)),
+                          ),
+                        ],
+                        onChanged: (val) => setState(() => _selectedCompanyId = val),
+                      );
+                    }),
                     const SizedBox(height: 28),
 
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _handleAdd,
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.person_add),
-                        label: Text(_isLoading ? 'Oluşturuluyor...' : AppStrings.add),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    Obx(() {
+                      final loading = _uc.isLoading.value;
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: loading ? null : _handleAdd,
+                          icon: loading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.person_add),
+                          label: Text(loading ? 'Oluşturuluyor...' : AppStrings.add),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    }),
                   ],
                 ),
               ),

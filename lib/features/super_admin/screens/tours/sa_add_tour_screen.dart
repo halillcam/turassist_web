@@ -3,9 +3,10 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../../../core/models/tour_model.dart';
 import '../../../../core/services/tour_image_upload_service.dart';
-import '../../services/super_admin_service.dart';
+import '../../../companies/presentation/controllers/company_controller.dart';
+import '../../../tours/domain/entities/tour_entity.dart';
+import '../../../tours/presentation/controllers/tour_controller.dart';
 
 class SaAddTourScreen extends StatefulWidget {
   final String companyId;
@@ -16,7 +17,8 @@ class SaAddTourScreen extends StatefulWidget {
 }
 
 class _SaAddTourScreenState extends State<SaAddTourScreen> {
-  final _service = SuperAdminService();
+  late final TourController _tc;
+  late final CompanyController _cc;
   final _imageUploadService = TourImageUploadService();
   final _formKey = GlobalKey<FormState>();
 
@@ -38,7 +40,6 @@ class _SaAddTourScreenState extends State<SaAddTourScreen> {
   final List<DateTime> _selectedDates = [];
   final List<_ProgramDay> _programDays = [];
   String _selectedRegion = 'Marmara';
-  bool _isLoading = false;
   bool _isUploadingImage = false;
   String? _uploadedImageFileName;
 
@@ -63,6 +64,13 @@ class _SaAddTourScreenState extends State<SaAddTourScreen> {
     6: 'Cmt',
     7: 'Paz',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _tc = Get.find<TourController>();
+    _cc = Get.find<CompanyController>();
+  }
 
   @override
   void dispose() {
@@ -113,8 +121,8 @@ class _SaAddTourScreenState extends State<SaAddTourScreen> {
     });
   }
 
-  List<DayProgram> _buildProgram() {
-    final result = <DayProgram>[];
+  List<DayProgramEntity> _buildProgram() {
+    final result = <DayProgramEntity>[];
     for (int i = 0; i < _programDays.length; i++) {
       final day = _programDays[i];
       final title = day.titleCtrl.text.trim();
@@ -124,7 +132,7 @@ class _SaAddTourScreenState extends State<SaAddTourScreen> {
           .toList();
       if (activities.isNotEmpty) {
         result.add(
-          DayProgram(
+          DayProgramEntity(
             id: '',
             title: title.isEmpty ? '${i + 1}. Gün' : title,
             day: i + 1,
@@ -176,48 +184,45 @@ class _SaAddTourScreenState extends State<SaAddTourScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
-    try {
-      final company = await _service.getCompany(widget.companyId);
-      final companyName = company?.companyName ?? '';
+    // Şirket adını CompanyController'dan al.
+    final company = await _cc.getCompany(widget.companyId);
+    final companyName = company?.companyName ?? '';
 
-      final tour = TourModel(
-        title: _titleCtrl.text.trim(),
-        description: _descriptionCtrl.text.trim(),
-        extraDetail: _extraDetailCtrl.text.trim(),
-        price: double.tryParse(_priceCtrl.text) ?? 0,
-        imageUrl: _imageUrlCtrl.text.trim(),
-        companyId: widget.companyId,
-        companyName: companyName,
-        guideName: _guideNameCtrl.text.trim().isEmpty ? null : _guideNameCtrl.text.trim(),
-        capacity: int.tryParse(_capacityCtrl.text) ?? 0,
-        city: _cityCtrl.text.trim(),
-        region: _selectedRegion,
-        busInfo: BusInfo(
-          driverName: _driverNameCtrl.text.trim(),
-          phoneNumber: _driverPhoneCtrl.text.trim(),
-          plate: _plateCtrl.text.trim(),
-          capacity: int.tryParse(_busCapacityCtrl.text) ?? 0,
-        ),
-        program: _buildProgram(),
-        departureDays: List.from(_selectedDepartureDays),
-        departureTime: _departureTimeCtrl.text.trim(),
-        departureDates: _selectedDates.isNotEmpty ? List.from(_selectedDates) : null,
-        seriesId: 'series_${DateTime.now().microsecondsSinceEpoch}',
-      );
+    final tour = TourEntity(
+      id: '',
+      title: _titleCtrl.text.trim(),
+      description: _descriptionCtrl.text.trim(),
+      extraDetail: _extraDetailCtrl.text.trim(),
+      price: double.tryParse(_priceCtrl.text) ?? 0,
+      imageUrl: _imageUrlCtrl.text.trim(),
+      companyId: widget.companyId,
+      companyName: companyName,
+      guideId: '',
+      guideName: _guideNameCtrl.text.trim().isEmpty ? null : _guideNameCtrl.text.trim(),
+      capacity: int.tryParse(_capacityCtrl.text) ?? 0,
+      city: _cityCtrl.text.trim(),
+      region: _selectedRegion,
+      busInfo: BusInfoEntity(
+        driverName: _driverNameCtrl.text.trim(),
+        phoneNumber: _driverPhoneCtrl.text.trim(),
+        plate: _plateCtrl.text.trim(),
+        capacity: int.tryParse(_busCapacityCtrl.text) ?? 0,
+      ),
+      program: _buildProgram(),
+      departureDays: List.from(_selectedDepartureDays),
+      departureTime: _departureTimeCtrl.text.trim(),
+      departureDates: _selectedDates.isNotEmpty ? List.from(_selectedDates) : null,
+      seriesId: 'series_${DateTime.now().microsecondsSinceEpoch}',
+      isDeleted: false,
+    );
 
-      await _service.addTour(tour);
-      Get.snackbar('Başarılı', 'Tur başarıyla eklendi.', snackPosition: SnackPosition.BOTTOM);
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
-    } finally {
-      setState(() => _isLoading = false);
-    }
+    // Controller isLoading'i yönetir; başarılıysa sayfayı kapat.
+    final ok = await _tc.addSingleTour(tour);
+    if (ok && mounted) Navigator.pop(context);
   }
 
   Future<void> _pickAndUploadImage() async {
-    if (_isUploadingImage || _isLoading) return;
+    if (_isUploadingImage || _tc.isLoading.value) return;
 
     setState(() => _isUploadingImage = true);
     try {
@@ -316,26 +321,29 @@ class _SaAddTourScreenState extends State<SaAddTourScreen> {
               const SizedBox(height: 16),
               _buildProgramSection(),
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _handleSave,
-                  icon: _isLoading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.save),
-                  label: Text(_isLoading ? 'Kaydediliyor...' : AppStrings.save),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              Obx(() {
+                final loading = _tc.isLoading.value;
+                return SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: loading ? null : _handleSave,
+                    icon: loading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.save),
+                    label: Text(loading ? 'Kaydediliyor...' : AppStrings.save),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
               const SizedBox(height: 40),
             ],
           ),
