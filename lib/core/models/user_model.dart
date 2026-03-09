@@ -29,6 +29,18 @@ class UserModel {
 
   final DateTime? createdAt;
 
+  /// Yönetim paneli tarafından oluşturulan rehber hesabının giriş parolası (sadece guide rolü).
+  final String? guidePassword;
+
+  /// Panelden eklenen müşteri hesabının giriş ID'si.
+  final String? loginId;
+
+  /// Panelden eklenen müşteri hesabının giriş parolası.
+  final String? customerPassword;
+
+  /// Bu müşteri hesabı yönetim panelinden fiziksel satış için oluşturulduysa true.
+  final bool isPanelManagedCustomer;
+
   UserModel({
     this.uid,
     required this.fullName,
@@ -42,6 +54,10 @@ class UserModel {
     this.selectedCity = '',
     this.isDeleted = false,
     this.createdAt,
+    this.guidePassword,
+    this.loginId,
+    this.customerPassword,
+    this.isPanelManagedCustomer = false,
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String docId) {
@@ -58,6 +74,10 @@ class UserModel {
       selectedCity: map['selectedCity'] ?? '',
       isDeleted: map['isDeleted'] ?? false,
       createdAt: map['createdAt'] != null ? (map['createdAt'] as Timestamp).toDate() : null,
+      guidePassword: map['guidePassword'] as String?,
+      loginId: map['loginId'] as String?,
+      customerPassword: map['customerPassword'] as String?,
+      isPanelManagedCustomer: map['isPanelManagedCustomer'] ?? false,
     );
   }
 
@@ -76,6 +96,10 @@ class UserModel {
       'createdAt': createdAt != null
           ? Timestamp.fromDate(createdAt!)
           : FieldValue.serverTimestamp(),
+      if (guidePassword != null) 'guidePassword': guidePassword,
+      if (loginId != null) 'loginId': loginId,
+      if (customerPassword != null) 'customerPassword': customerPassword,
+      'isPanelManagedCustomer': isPanelManagedCustomer,
     };
   }
 }

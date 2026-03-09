@@ -69,6 +69,11 @@ service cloud.firestore {
       return isSuperAdmin() || (isAdmin() && belongsToCurrentCompany(companyId));
     }
 
+    function canReadTours() {
+      // Tur listesi herkese açık: giriş yapan da yapmayan da turları görebilmeli.
+      return true;
+    }
+
     function isGuideForTour(tourId) {
       return isGuide() && hasTour(tourId) && tourDoc(tourId).guideId == request.auth.uid;
     }
@@ -78,7 +83,11 @@ service cloud.firestore {
         request.resource.data.companyId == resource.data.companyId &&
         request.resource.data.registeredCompanies == resource.data.registeredCompanies &&
         request.resource.data.isDeleted == resource.data.isDeleted &&
-        request.resource.data.createdAt == resource.data.createdAt;
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.loginId == resource.data.loginId &&
+        request.resource.data.customerPassword == resource.data.customerPassword &&
+        request.resource.data.guidePassword == resource.data.guidePassword &&
+        request.resource.data.isPanelManagedCustomer == resource.data.isPanelManagedCustomer;
     }
 
     function guideOwnsTourRequest(tourId, companyId) {
@@ -100,8 +109,7 @@ service cloud.firestore {
       allow create: if isSuperAdmin() ||
         (isAdmin() &&
           request.resource.data.companyId == currentCompanyId() &&
-          request.resource.data.role in ['guide', 'customer'] &&
-          request.resource.data.isDeleted == false);
+          request.resource.data.role in ['guide', 'customer']);
 
       allow update: if isSuperAdmin() ||
         (isSelf(userId) && preservesOwnUserSecurityFields()) ||
@@ -116,7 +124,7 @@ service cloud.firestore {
 
     // ─── Turlar ────────────────────────────────────────────────────────────
     match /tours/{tourId} {
-      allow read: if isSignedIn();
+      allow read: if canReadTours();
 
       allow create: if isSuperAdmin() ||
         (isAdmin() && request.resource.data.companyId == currentCompanyId());
@@ -125,6 +133,22 @@ service cloud.firestore {
         (isAdmin() &&
           resource.data.companyId == currentCompanyId() &&
           request.resource.data.companyId == resource.data.companyId);
+
+      match /messages/{messageId} {
+        allow read: if canReadTours();
+
+        allow create, update, delete: if isSuperAdmin() ||
+          (isAdmin() && tourDoc(tourId).companyId == currentCompanyId()) ||
+          isGuideForTour(tourId);
+      }
+
+      match /announcements/{announcementId} {
+        allow read: if canReadTours();
+
+        allow create, update, delete: if isSuperAdmin() ||
+          (isAdmin() && tourDoc(tourId).companyId == currentCompanyId()) ||
+          isGuideForTour(tourId);
+      }
     }
 
     // ─── Biletler ──────────────────────────────────────────────────────────

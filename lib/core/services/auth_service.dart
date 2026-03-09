@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../models/user_model.dart';
 
 /// Kimlik doğrulama servisi.
@@ -11,25 +11,88 @@ import '../models/user_model.dart';
 /// oluşturulur ve örnek hemen silinir.
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static const String guideEmailDomain = 'guide.turassist';
+  static const String customerEmailDomain = 'customer.turassist';
 
   User? get currentUser => _auth.currentUser;
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  static String normalizeGuideId(String guideId) => guideId.trim().toUpperCase();
+
+  static String normalizePanelLoginId(String loginId) => loginId.trim().toUpperCase();
+
+  static String buildGuideLoginEmail(String guideId) =>
+      '${normalizeGuideId(guideId)}@$guideEmailDomain';
+
+  static String buildCustomerLoginEmail(String customerId) =>
+      '${normalizePanelLoginId(customerId)}@$customerEmailDomain';
+
+  static bool isGeneratedGuideLoginEmail(String email) =>
+      email.trim().toLowerCase().endsWith('@$guideEmailDomain');
+
+  static bool isGeneratedCustomerLoginEmail(String email) =>
+      email.trim().toLowerCase().endsWith('@$customerEmailDomain');
+
+  static String extractGuideId(String email) {
+    final trimmed = email.trim();
+    if (!isGeneratedGuideLoginEmail(trimmed)) return trimmed;
+    return trimmed.substring(0, trimmed.length - '@$guideEmailDomain'.length).toUpperCase();
+  }
+
+  static String extractCustomerId(String email) {
+    final trimmed = email.trim();
+    if (!isGeneratedCustomerLoginEmail(trimmed)) return trimmed;
+    return trimmed.substring(0, trimmed.length - '@$customerEmailDomain'.length).toUpperCase();
+  }
+
+  static bool looksLikePanelLoginId(String value) {
+    final trimmed = value.trim();
+    return trimmed.isNotEmpty &&
+        !trimmed.contains('@') &&
+        RegExp(r'^[a-zA-Z0-9-]+$').hasMatch(trimmed);
+  }
+
+  static bool looksLikeGuideId(String value) => looksLikePanelLoginId(value);
+
+  List<String> buildLoginCandidates(String value) {
+    final trimmed = value.trim();
+    if (!looksLikePanelLoginId(trimmed)) {
+      return [trimmed];
+    }
+
+    final normalizedLoginId = normalizePanelLoginId(trimmed);
+    return [buildCustomerLoginEmail(normalizedLoginId), buildGuideLoginEmail(normalizedLoginId)];
+  }
+
   /// Giriş yapar ve [UserModel] döndürür.
   ///
   /// Hesap `isDeleted = true` ise oturum açılmaz ve [StateError] fırlatılır.
-  Future<UserModel?> signIn(String email, String password) async {
-    final credential = await _auth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
+  Future<UserModel?> signIn(String emailOrGuideId, String password) async {
+    UserCredential? credential;
+    Object? lastError;
+
+    for (final candidateEmail in buildLoginCandidates(emailOrGuideId)) {
+      try {
+        credential = await _auth.signInWithEmailAndPassword(
+          email: candidateEmail,
+          password: password,
+        );
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (credential == null) {
+      throw lastError ?? StateError('Giriş yapılamadı.');
+    }
 
     final uid = credential.user?.uid;
     if (uid == null) return null;
 
-    final doc = await _firestore.collection('users').doc(uid).get();
+    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
     if (!doc.exists || doc.data() == null) return null;
 
     final user = UserModel.fromMap(doc.data()!, doc.id);
@@ -45,7 +108,7 @@ class AuthService {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
 
-    final doc = await _firestore.collection('users').doc(uid).get();
+    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
     if (!doc.exists || doc.data() == null) return null;
     return UserModel.fromMap(doc.data()!, doc.id);
   }

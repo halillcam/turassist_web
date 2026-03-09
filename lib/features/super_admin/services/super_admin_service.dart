@@ -1,4 +1,6 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../../../core/models/company_model.dart';
 import '../../../core/models/feedback_model.dart';
 import '../../../core/models/notification_model.dart';
@@ -279,7 +281,7 @@ class SuperAdminService {
   /// `isScanned = true` olarak ayarlanır; müşteri QR okutmadan tur detayına
   /// erişebilir. Kullanıcı ve bilet tek atomik Firestore batch'iyle yazılır.
   Future<void> addParticipantToTour({
-    required String email,
+    required String loginId,
     required String password,
     required String fullName,
     required String phone,
@@ -289,6 +291,8 @@ class SuperAdminService {
     required double pricePaid,
     DateTime? departureDate,
   }) async {
+    final normalizedLoginId = AuthService.normalizePanelLoginId(loginId);
+    final email = AuthService.buildCustomerLoginEmail(normalizedLoginId);
     final uid = await _createAuthUser(email, password);
 
     final batch = _firestore.batch();
@@ -304,6 +308,9 @@ class SuperAdminService {
         companyId: companyId,
         tcNo: tcNo,
         registeredCompanies: [companyId],
+        loginId: normalizedLoginId,
+        customerPassword: password,
+        isPanelManagedCustomer: true,
       ).toMap(),
     );
 
@@ -332,13 +339,14 @@ class SuperAdminService {
   /// Kullanıcı oluşturma, `users` dokümanı yazma ve tur'un `guideId/guideName`
   /// güncellenmesi tek atomik batch ile gerçekleşir.
   Future<void> addGuideToTour({
-    required String email,
+    required String guideId,
     required String password,
     required String fullName,
     required String phone,
     required String tourId,
     required String companyId,
   }) async {
+    final email = AuthService.buildGuideLoginEmail(guideId);
     final uid = await _createAuthUser(email, password);
 
     final batch = _firestore.batch();
@@ -352,6 +360,13 @@ class SuperAdminService {
         phone: phone,
         role: 'guide',
         companyId: companyId,
+        registeredCompanies: const [],
+        selectedCity: '',
+        profileImage: null,
+        tcNo: '',
+        isDeleted: false,
+        loginId: AuthService.normalizePanelLoginId(guideId),
+        guidePassword: password,
       ).toMap(),
     );
 
@@ -361,6 +376,31 @@ class SuperAdminService {
     });
 
     await batch.commit();
+  }
+
+  /// Firebase Auth ve Firestore'daki rehber parolasini günceller.
+  Future<void> updateGuidePassword({
+    required String guideId,
+    required String guideEmail,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final secondaryApp = await Firebase.initializeApp(
+      name: 'secondary_pwd_sa_$ts',
+      options: Firebase.app().options,
+    );
+    try {
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      final cred = await secondaryAuth.signInWithEmailAndPassword(
+        email: guideEmail,
+        password: currentPassword,
+      );
+      await cred.user!.updatePassword(newPassword);
+    } finally {
+      await secondaryApp.delete();
+    }
+    await _firestore.collection('users').doc(guideId).update({'guidePassword': newPassword});
   }
 
   Future<void> updateGuide(String guideId, Map<String, dynamic> data) {

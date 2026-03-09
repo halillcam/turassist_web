@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../services/super_admin_service.dart';
 
 class SaAddGuideScreen extends StatefulWidget {
@@ -17,15 +18,20 @@ class SaAddGuideScreen extends StatefulWidget {
 class _SaAddGuideScreenState extends State<SaAddGuideScreen> {
   final _service = SuperAdminService();
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  final _guideIdCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _fullNameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   bool _isLoading = false;
 
+  String get _normalizedGuideId => AuthService.normalizeGuideId(_guideIdCtrl.text);
+
+  String get _generatedLoginEmail =>
+      _normalizedGuideId.isEmpty ? '' : AuthService.buildGuideLoginEmail(_normalizedGuideId);
+
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _guideIdCtrl.dispose();
     _passwordCtrl.dispose();
     _fullNameCtrl.dispose();
     _phoneCtrl.dispose();
@@ -37,26 +43,103 @@ class _SaAddGuideScreenState extends State<SaAddGuideScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final guideId = _normalizedGuideId;
+      final password = _passwordCtrl.text.trim();
+
       await _service.addGuideToTour(
-        email: _emailCtrl.text.trim(),
-        password: _passwordCtrl.text.trim(),
+        guideId: guideId,
+        password: password,
         fullName: _fullNameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
         tourId: widget.tourId,
         companyId: widget.companyId,
       );
 
-      Get.snackbar(
-        'Başarılı',
-        'Tur sorumlusu başarıyla eklendi.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      if (!mounted) return;
+      await _showCredentialsDialog(guideId: guideId, password: password);
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Hata', _friendlyError(e), snackPosition: SnackPosition.BOTTOM);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _friendlyError(Object error) {
+    final message = error.toString();
+    if (message.contains('email-already-in-use')) {
+      return 'Bu Guide ID zaten kullanılıyor.';
+    }
+    if (message.contains('weak-password')) {
+      return 'Şifre en az 6 karakter olmalıdır.';
+    }
+    if (message.contains('invalid-email')) {
+      return 'Guide ID formatı geçersiz.';
+    }
+    return 'İşlem başarısız: $message';
+  }
+
+  Future<void> _showCredentialsDialog({required String guideId, required String password}) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Tur sorumlusu oluşturuldu'),
+        content: SelectionArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Aşağıdaki giriş bilgilerini tur sorumlusuna iletin.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              _credentialItem('Guide ID', guideId),
+              const SizedBox(height: 12),
+              _credentialItem('Şifre', password),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Tamam')),
+        ],
+      ),
+    );
+  }
+
+  Widget _credentialItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: SelectableText(
+            value,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -95,18 +178,40 @@ class _SaAddGuideScreenState extends State<SaAddGuideScreen> {
                     style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
                   const SizedBox(height: 24),
+                  _field(
+                    'Guide ID *',
+                    _guideIdCtrl,
+                    required: true,
+                    onChanged: (_) => setState(() {}),
+                    helperText: _generatedLoginEmail.isEmpty
+                        ? 'Sistem giriş tanımlayıcısını otomatik üretir.'
+                        : 'Giriş tanımlayıcısı: $_generatedLoginEmail',
+                    validator: (value) {
+                      final guideId = AuthService.normalizeGuideId(value ?? '');
+                      if (guideId.isEmpty) return 'Guide ID zorunlu';
+                      if (!RegExp(r'^[A-Z0-9-]+$').hasMatch(guideId)) {
+                        return 'Sadece harf, rakam ve tire kullanın';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   _field('Ad Soyad *', _fullNameCtrl, required: true),
                   const SizedBox(height: 12),
                   _field('Telefon *', _phoneCtrl, keyboard: TextInputType.phone, required: true),
                   const SizedBox(height: 12),
                   _field(
-                    'E-posta (ID) *',
-                    _emailCtrl,
-                    keyboard: TextInputType.emailAddress,
+                    'Şifre *',
+                    _passwordCtrl,
+                    obscure: true,
                     required: true,
+                    validator: (value) {
+                      final password = (value ?? '').trim();
+                      if (password.isEmpty) return 'Şifre zorunlu';
+                      if (password.length < 6) return 'En az 6 karakter girin';
+                      return null;
+                    },
                   ),
-                  const SizedBox(height: 12),
-                  _field('Şifre *', _passwordCtrl, obscure: true, required: true),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -143,14 +248,21 @@ class _SaAddGuideScreenState extends State<SaAddGuideScreen> {
     TextInputType keyboard = TextInputType.text,
     bool obscure = false,
     bool required = false,
+    String? helperText,
+    String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
   }) {
     return TextFormField(
       controller: ctrl,
       keyboardType: keyboard,
       obscureText: obscure,
-      validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null : null,
+      onChanged: onChanged,
+      validator:
+          validator ??
+          (required ? (v) => (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null : null),
       decoration: InputDecoration(
         labelText: label,
+        helperText: helperText,
         isDense: true,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),

@@ -48,20 +48,53 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => const SuperAdminDashboardScreen());
 
       case tourDetail:
-        final tourId = settings.arguments as String;
-        return MaterialPageRoute(builder: (_) => TourDetailScreen(tourId: tourId));
+        final tourDetailArgs = settings.arguments;
+        final String tourDetailId;
+        DateTime? tourDetailDate;
+        if (tourDetailArgs is String) {
+          tourDetailId = tourDetailArgs;
+        } else {
+          final map = tourDetailArgs as Map<String, dynamic>;
+          tourDetailId = map['tourId'] as String;
+          tourDetailDate = map['departureDate'] as DateTime?;
+        }
+        return MaterialPageRoute(
+          builder: (_) => TourDetailScreen(tourId: tourDetailId, departureDate: tourDetailDate),
+        );
 
       case updateTour:
         final tourId = settings.arguments as String;
         return MaterialPageRoute(builder: (_) => UpdateTourScreen(tourId: tourId));
 
       case addParticipant:
-        final tourId = settings.arguments as String;
-        return MaterialPageRoute(builder: (_) => AddParticipantScreen(tourId: tourId));
+        final apArgs = settings.arguments;
+        final String apTourId;
+        DateTime? apDate;
+        if (apArgs is String) {
+          apTourId = apArgs;
+        } else {
+          final map = apArgs as Map<String, dynamic>;
+          apTourId = map['tourId'] as String;
+          apDate = map['departureDate'] as DateTime?;
+        }
+        return MaterialPageRoute(
+          builder: (_) => AddParticipantScreen(tourId: apTourId, departureDate: apDate),
+        );
 
       case participantsList:
-        final tourId = settings.arguments as String;
-        return MaterialPageRoute(builder: (_) => ParticipantsListScreen(tourId: tourId));
+        final plArgs = settings.arguments;
+        final String plTourId;
+        DateTime? plDate;
+        if (plArgs is String) {
+          plTourId = plArgs;
+        } else {
+          final map = plArgs as Map<String, dynamic>;
+          plTourId = map['tourId'] as String;
+          plDate = map['departureDate'] as DateTime?;
+        }
+        return MaterialPageRoute(
+          builder: (_) => ParticipantsListScreen(tourId: plTourId, departureDate: plDate),
+        );
 
       case addGuide:
         final tourId = settings.arguments as String;
@@ -72,8 +105,19 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => UpdateCompanyScreen(companyId: companyId));
 
       case superAdminTourDetail:
-        final tourId = settings.arguments as String;
-        return MaterialPageRoute(builder: (_) => SuperAdminTourDetailScreen(tourId: tourId));
+        final saTourArgs = settings.arguments;
+        final String saTourId;
+        DateTime? saTourDate;
+        if (saTourArgs is String) {
+          saTourId = saTourArgs;
+        } else {
+          final map = saTourArgs as Map<String, dynamic>;
+          saTourId = map['tourId'] as String;
+          saTourDate = map['departureDate'] as DateTime?;
+        }
+        return MaterialPageRoute(
+          builder: (_) => SuperAdminTourDetailScreen(tourId: saTourId, departureDate: saTourDate),
+        );
 
       case saAddTour:
         final companyId = settings.arguments as String;
@@ -84,15 +128,29 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => SaUpdateTourScreen(tourId: tourId));
 
       case saAddParticipant:
-        final args = settings.arguments as Map<String, String>;
+        final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
-          builder: (_) =>
-              SaAddParticipantScreen(tourId: args['tourId']!, companyId: args['companyId']!),
+          builder: (_) => SaAddParticipantScreen(
+            tourId: args['tourId'] as String,
+            companyId: args['companyId'] as String,
+            departureDate: args['departureDate'] as DateTime?,
+          ),
         );
 
       case saParticipantsList:
-        final tourId = settings.arguments as String;
-        return MaterialPageRoute(builder: (_) => SaParticipantsListScreen(tourId: tourId));
+        final args = settings.arguments;
+        final String tourId;
+        DateTime? departureDate;
+        if (args is String) {
+          tourId = args;
+        } else {
+          final map = args as Map<String, dynamic>;
+          tourId = map['tourId'] as String;
+          departureDate = map['departureDate'] as DateTime?;
+        }
+        return MaterialPageRoute(
+          builder: (_) => SaParticipantsListScreen(tourId: tourId, departureDate: departureDate),
+        );
 
       case saAddGuide:
         final args = settings.arguments as Map<String, String>;

@@ -7,14 +7,16 @@ import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/tour_model.dart';
 import '../../../../core/models/user_model.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
 import '../../controllers/sa_tour_controller.dart';
 import '../../services/super_admin_service.dart';
 
 class SuperAdminTourDetailScreen extends StatefulWidget {
   final String tourId;
+  final DateTime? departureDate;
 
-  const SuperAdminTourDetailScreen({super.key, required this.tourId});
+  const SuperAdminTourDetailScreen({super.key, required this.tourId, this.departureDate});
 
   @override
   State<SuperAdminTourDetailScreen> createState() => _SuperAdminTourDetailScreenState();
@@ -60,6 +62,32 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (widget.departureDate != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(20),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.primary.withAlpha(60)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_today, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Seçilen Çıkış Tarihi: ${DateFormat('dd.MM.yyyy').format(widget.departureDate!)}',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 _buildActionButtons(tour),
                 const SizedBox(height: 24),
                 _buildInfoCard(tour),
@@ -91,7 +119,11 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
           AppStrings.participants,
           Icons.people,
           AppColors.primary,
-          () => Navigator.pushNamed(context, AppRoutes.saParticipantsList, arguments: tour.id),
+          () => Navigator.pushNamed(
+            context,
+            AppRoutes.saParticipantsList,
+            arguments: {'tourId': tour.id, 'departureDate': widget.departureDate},
+          ),
         ),
         _actionButton(
           AppStrings.addParticipant,
@@ -100,7 +132,11 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
           () => Navigator.pushNamed(
             context,
             AppRoutes.saAddParticipant,
-            arguments: {'tourId': tour.id ?? '', 'companyId': tour.companyId},
+            arguments: {
+              'tourId': tour.id ?? '',
+              'companyId': tour.companyId,
+              'departureDate': widget.departureDate,
+            },
           ),
         ),
         _actionButton(
@@ -254,6 +290,8 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
       future: tour.guideId.isEmpty ? Future.value(null) : _service.getUserByUid(tour.guideId),
       builder: (context, snapshot) {
         final guide = snapshot.data;
+        final usesGuideLoginId =
+            guide != null && AuthService.isGeneratedGuideLoginEmail(guide.email);
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -280,7 +318,11 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
                     children: [
                       _infoItem('Ad Soyad', guide.fullName),
                       _infoItem('Telefon', guide.phone.isEmpty ? '-' : guide.phone),
-                      _infoItem('E-posta', guide.email),
+                      _infoItem(
+                        usesGuideLoginId ? 'Guide ID' : 'E-posta',
+                        usesGuideLoginId ? AuthService.extractGuideId(guide.email) : guide.email,
+                      ),
+                      _PasswordInfoItem(label: 'Giriş Parolası', password: guide.guidePassword),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -298,13 +340,21 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
                         icon: Icon(guide.isDeleted ? Icons.visibility : Icons.visibility_off),
                         label: Text(guide.isDeleted ? AppStrings.activate : AppStrings.deactivate),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: () => _sendGuidePasswordReset(guide),
-                        icon: const Icon(Icons.lock_reset),
-                        label: const Text(AppStrings.sendPasswordReset),
-                      ),
+                      if (!usesGuideLoginId)
+                        OutlinedButton.icon(
+                          onPressed: () => _sendGuidePasswordReset(guide),
+                          icon: const Icon(Icons.lock_reset),
+                          label: const Text(AppStrings.sendPasswordReset),
+                        ),
                     ],
                   ),
+                  if (usesGuideLoginId) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Bu hesap için e-posta doğrulaması ve şifre sıfırlama maili kullanılmaz.',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -406,6 +456,15 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
   }
 
   Future<void> _sendGuidePasswordReset(UserModel guide) async {
+    if (AuthService.isGeneratedGuideLoginEmail(guide.email)) {
+      Get.snackbar(
+        'Bilgi',
+        'Bu guide hesabı için şifre sıfırlama maili kullanılmaz.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
     try {
       await _service.sendPasswordResetEmail(guide.email);
       Get.snackbar(
@@ -423,6 +482,17 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
   Future<void> _showGuideEditor(TourModel tour, {UserModel? guide}) {
     final fullNameCtrl = TextEditingController(text: guide?.fullName ?? tour.guideName ?? '');
     final phoneCtrl = TextEditingController(text: guide?.phone ?? '');
+    final newPasswordCtrl = TextEditingController();
+    final loginIdentifier = guide == null
+        ? ''
+        : AuthService.isGeneratedGuideLoginEmail(guide.email)
+        ? AuthService.extractGuideId(guide.email)
+        : guide.email;
+    final loginIdentifierLabel = guide == null
+        ? 'Guide ID'
+        : AuthService.isGeneratedGuideLoginEmail(guide.email)
+        ? 'Guide ID'
+        : 'Giriş E-postası';
 
     return showDialog<void>(
       context: context,
@@ -445,9 +515,25 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
               if (guide != null) ...[
                 const SizedBox(height: 12),
                 TextField(
-                  controller: TextEditingController(text: guide.email),
+                  controller: TextEditingController(text: loginIdentifier),
                   enabled: false,
-                  decoration: const InputDecoration(labelText: 'Giriş E-postası'),
+                  decoration: InputDecoration(labelText: loginIdentifierLabel),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: newPasswordCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Yeni Parola',
+                    hintText: guide.guidePassword != null
+                        ? 'Boş bırakırsanız parola değişmez'
+                        : 'Mevcut parola kayıtlı değil',
+                    helperText: guide.guidePassword == null
+                        ? 'Bu hesabın parolası yönetim sistemine kaydedilmemiş, değiştirilemiyor.'
+                        : null,
+                    helperMaxLines: 2,
+                    enabled: guide.guidePassword != null,
+                  ),
                 ),
               ],
             ],
@@ -471,6 +557,25 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
                       'phone': phoneCtrl.text.trim(),
                     });
                     await _service.updateTour(tour.id!, {'guideName': fullNameCtrl.text.trim()});
+                    final newPwd = newPasswordCtrl.text.trim();
+                    if (newPwd.isNotEmpty && guide.guidePassword != null) {
+                      try {
+                        await _service.updateGuidePassword(
+                          guideId: guide.uid!,
+                          guideEmail: guide.email,
+                          currentPassword: guide.guidePassword!,
+                          newPassword: newPwd,
+                        );
+                      } catch (e) {
+                        Get.snackbar(
+                          'Parola Güncellenemedi',
+                          e.toString(),
+                          snackPosition: SnackPosition.BOTTOM,
+                          backgroundColor: AppColors.error,
+                          colorText: Colors.white,
+                        );
+                      }
+                    }
                     if (mounted) {
                       Navigator.pop(context);
                       setState(() {});
@@ -483,6 +588,7 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
     ).whenComplete(() {
       fullNameCtrl.dispose();
       phoneCtrl.dispose();
+      newPasswordCtrl.dispose();
     });
   }
 
@@ -532,6 +638,58 @@ class _SuperAdminTourDetailScreenState extends State<SuperAdminTourDetailScreen>
         ),
         const SizedBox(height: 2),
         Text(value, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+      ],
+    );
+  }
+}
+
+class _PasswordInfoItem extends StatefulWidget {
+  final String label;
+  final String? password;
+
+  const _PasswordInfoItem({required this.label, this.password});
+
+  @override
+  State<_PasswordInfoItem> createState() => _PasswordInfoItemState();
+}
+
+class _PasswordInfoItemState extends State<_PasswordInfoItem> {
+  bool _visible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final display = widget.password != null ? (_visible ? widget.password! : '••••••••') : '---';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          widget.label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(display, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+            if (widget.password != null) ...[
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () => setState(() => _visible = !_visible),
+                borderRadius: BorderRadius.circular(4),
+                child: Icon(
+                  _visible ? Icons.visibility_off : Icons.visibility,
+                  size: 16,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ],
+        ),
       ],
     );
   }

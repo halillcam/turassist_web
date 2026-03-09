@@ -3,9 +3,9 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../../../core/constants/app_routes.dart';
 import '../../../../core/models/tour_model.dart';
 import '../../controllers/admin_tour_controller.dart';
+import 'tour_schedule_screen.dart';
 
 class ActiveToursScreen extends StatefulWidget {
   final String companyId;
@@ -80,7 +80,8 @@ class _ActiveToursScreenState extends State<ActiveToursScreen> {
                       ),
                     );
                   }
-                  return _TourListView(tours: tours);
+                  final groups = _groupTours(tours);
+                  return _TourGroupListView(groups: groups);
                 },
               ),
             ),
@@ -89,49 +90,114 @@ class _ActiveToursScreenState extends State<ActiveToursScreen> {
       ),
     );
   }
+
+  /// Turları seriesId'ye göre gruplar.
+  static List<_TourGroup> _groupTours(List<TourModel> tours) {
+    final Map<String, List<TourModel>> bySeriesId = {};
+    final List<TourModel> standalone = [];
+
+    for (final tour in tours) {
+      if (tour.seriesId != null && tour.seriesId!.isNotEmpty) {
+        bySeriesId.putIfAbsent(tour.seriesId!, () => []).add(tour);
+      } else {
+        standalone.add(tour);
+      }
+    }
+
+    final groups = <_TourGroup>[];
+
+    for (final instances in bySeriesId.values) {
+      instances.sort((a, b) {
+        final da = a.departureDate ?? DateTime(9999);
+        final db = b.departureDate ?? DateTime(9999);
+        return da.compareTo(db);
+      });
+      groups.add(_TourGroup(instances: instances));
+    }
+
+    for (final tour in standalone) {
+      groups.add(_TourGroup(instances: [tour]));
+    }
+
+    groups.sort(
+      (a, b) => (b.representative.createdAt ?? DateTime(0)).compareTo(
+        a.representative.createdAt ?? DateTime(0),
+      ),
+    );
+
+    return groups;
+  }
 }
 
-class _TourListView extends StatelessWidget {
-  final List<TourModel> tours;
+class _TourGroup {
+  final List<TourModel> instances;
 
-  const _TourListView({required this.tours});
+  _TourGroup({required this.instances});
 
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: tours.length,
-      itemBuilder: (context, index) {
-        final tour = tours[index];
-        return _TourCard(tour: tour);
-      },
+  TourModel get representative => instances.first;
+
+  List<DateTime> get allDates {
+    final dates = <DateTime>{};
+    for (final t in instances) {
+      if (t.departureDate != null) dates.add(t.departureDate!);
+    }
+    if (instances.length == 1) {
+      for (final d in instances.first.departureDates ?? []) {
+        dates.add(d);
+      }
+    }
+    return dates.toList()..sort();
+  }
+
+  bool get hasMultipleDates => allDates.length > 1;
+
+  TourModel instanceForDate(DateTime date) {
+    if (instances.length == 1) return instances.first;
+    return instances.firstWhere(
+      (t) =>
+          t.departureDate != null &&
+          t.departureDate!.year == date.year &&
+          t.departureDate!.month == date.month &&
+          t.departureDate!.day == date.day,
+      orElse: () => instances.first,
     );
   }
 }
 
-class _TourCard extends StatelessWidget {
-  final TourModel tour;
+class _TourGroupListView extends StatelessWidget {
+  final List<_TourGroup> groups;
 
-  const _TourCard({required this.tour});
+  const _TourGroupListView({required this.groups});
 
   @override
   Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: groups.length,
+      itemBuilder: (context, index) => _TourGroupCard(group: groups[index]),
+    );
+  }
+}
+
+class _TourGroupCard extends StatelessWidget {
+  final _TourGroup group;
+
+  const _TourGroupCard({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final tour = group.representative;
     final dateFormat = DateFormat('dd.MM.yyyy');
-    final departureDateText = tour.departureDate != null
-        ? dateFormat.format(tour.departureDate!)
-        : tour.departureDays.isNotEmpty
-        ? _departureDaysText(tour.departureDays)
-        : '-';
+    final dates = group.allDates;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        onTap: () => Navigator.pushNamed(context, AppRoutes.tourDetail, arguments: tour.id),
+        onTap: () => _handleTap(context),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Tur görseli
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: tour.imageUrl.isNotEmpty
@@ -145,7 +211,6 @@ class _TourCard extends StatelessWidget {
                     : _imagePlaceholder(),
               ),
               const SizedBox(width: 16),
-              // Bilgiler
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,11 +229,13 @@ class _TourCard extends StatelessWidget {
                       style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     ),
                     const SizedBox(height: 6),
-                    _timeChip(tour.departureDate),
+                    if (dates.isNotEmpty)
+                      _datesRow(dates, dateFormat)
+                    else
+                      _departureDaysChip(tour),
                   ],
                 ),
               ),
-              // Sağ taraf: fiyat, kapasite, çıkış
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -185,17 +252,85 @@ class _TourCard extends StatelessWidget {
                     'Kapasite: ${tour.capacity}',
                     style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Çıkış: $departureDateText',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
+                  if (group.instances.length > 1) ...[
+                    const SizedBox(height: 4),
+                    _chip(AppColors.info, '${group.instances.length} tarih'),
+                  ],
                 ],
               ),
               const SizedBox(width: 8),
-              const Icon(Icons.chevron_right, color: AppColors.slate400),
+              Icon(
+                group.hasMultipleDates ? Icons.calendar_month : Icons.chevron_right,
+                color: AppColors.slate400,
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _datesRow(List<DateTime> dates, DateFormat fmt) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        ...dates
+            .take(4)
+            .map(
+              (d) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(20),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  fmt.format(d),
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+        if (dates.length > 4)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.slate200,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '+${dates.length - 4} daha',
+              style: const TextStyle(color: AppColors.slate600, fontSize: 11),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _handleTap(BuildContext context) async {
+    final representative = group.representative;
+    final tourId = representative.id;
+    if (tourId == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tur bilgisi eksik olduğu için takvim açılamadı.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TourScheduleScreen(
+          companyId: representative.companyId,
+          representativeTourId: tourId,
+          seriesId: representative.seriesId,
         ),
       ),
     );
@@ -212,17 +347,10 @@ class _TourCard extends StatelessWidget {
 
   static const _dayLabels = {1: 'Pzt', 2: 'Sal', 3: 'Çar', 4: 'Per', 5: 'Cum', 6: 'Cmt', 7: 'Paz'};
 
-  static String _departureDaysText(List<int> days) {
-    return days.map((d) => _dayLabels[d] ?? '').join(', ');
-  }
-
-  static Widget _timeChip(DateTime? departureDate) {
-    if (departureDate == null) {
-      return _chip(AppColors.info, 'Takvimli');
-    }
-
-    final isPast = departureDate.isBefore(DateTime.now());
-    return _chip(isPast ? AppColors.warning : AppColors.success, isPast ? 'Geçmiş' : 'Gelecek');
+  static Widget _departureDaysChip(TourModel tour) {
+    if (tour.departureDays.isEmpty) return const SizedBox.shrink();
+    final label = tour.departureDays.map((d) => _dayLabels[d] ?? '').join(', ');
+    return _chip(AppColors.info, label);
   }
 
   static Widget _chip(Color color, String label) {

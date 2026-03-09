@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../controllers/admin_tour_controller.dart';
 
 class AddParticipantScreen extends StatefulWidget {
   final String tourId;
+  final DateTime? departureDate;
 
-  const AddParticipantScreen({super.key, required this.tourId});
+  const AddParticipantScreen({super.key, required this.tourId, this.departureDate});
 
   @override
   State<AddParticipantScreen> createState() => _AddParticipantScreenState();
@@ -16,13 +19,19 @@ class AddParticipantScreen extends StatefulWidget {
 class _AddParticipantScreenState extends State<AddParticipantScreen> {
   late final AdminTourController _controller;
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  final _participantIdCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _fullNameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _tcNoCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   bool _isLoading = false;
+
+  String get _normalizedParticipantId => AuthService.normalizePanelLoginId(_participantIdCtrl.text);
+
+  String get _generatedLoginEmail => _normalizedParticipantId.isEmpty
+      ? ''
+      : AuthService.buildCustomerLoginEmail(_normalizedParticipantId);
 
   @override
   void initState() {
@@ -32,7 +41,7 @@ class _AddParticipantScreenState extends State<AddParticipantScreen> {
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _participantIdCtrl.dispose();
     _passwordCtrl.dispose();
     _fullNameCtrl.dispose();
     _phoneCtrl.dispose();
@@ -49,32 +58,112 @@ class _AddParticipantScreenState extends State<AddParticipantScreen> {
       final companyId = await _controller.getCurrentCompanyId();
       if (companyId == null) throw Exception('Şirket bilgisi alınamadı');
 
+      final participantId = _normalizedParticipantId;
+      final password = _passwordCtrl.text.trim();
+
       await _controller.addParticipantToTour(
-        email: _emailCtrl.text.trim(),
-        password: _passwordCtrl.text.trim(),
+        loginId: participantId,
+        password: password,
         fullName: _fullNameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
         tcNo: _tcNoCtrl.text.trim(),
         tourId: widget.tourId,
         companyId: companyId,
         pricePaid: double.tryParse(_priceCtrl.text) ?? 0,
+        departureDate: widget.departureDate,
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Katılımcı başarıyla eklendi.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      await _showCredentialsDialog(participantId: participantId, password: password);
+      if (!mounted) return;
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error));
+      ).showSnackBar(SnackBar(content: Text(_friendlyError(e)), backgroundColor: AppColors.error));
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  String _friendlyError(Object error) {
+    final message = error.toString();
+    if (message.contains('login-id-already-in-use')) {
+      return 'Bu Müşteri ID başka bir panel hesabında zaten kullanılıyor.';
+    }
+    if (message.contains('email-already-in-use')) {
+      return 'Bu Müşteri ID zaten kullanılıyor.';
+    }
+    if (message.contains('weak-password')) {
+      return 'Şifre en az 6 karakter olmalıdır.';
+    }
+    if (message.contains('invalid-email')) {
+      return 'Müşteri ID formatı geçersiz.';
+    }
+    return 'İşlem başarısız: $message';
+  }
+
+  Future<void> _showCredentialsDialog({required String participantId, required String password}) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Katılımcı oluşturuldu'),
+        content: SelectionArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Aşağıdaki giriş bilgilerini müşteriye iletin. Bu hesap bilet oluşturulmuş ve QR okutulmuş gibi hazırlanır.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              _credentialItem('Müşteri ID', participantId),
+              const SizedBox(height: 12),
+              _credentialItem('Şifre', password),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Tamam')),
+        ],
+      ),
+    );
+  }
+
+  Widget _credentialItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: SelectableText(
+            value,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -108,9 +197,30 @@ class _AddParticipantScreenState extends State<AddParticipantScreen> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Oluşturulan ID ve şifre ile mobil uygulamadan giriş yapılabilir.',
+                    'Fiziksel satış için müşteri hesabı oluşturulur. Bu hesap, bilet satın alınmış ve QR okutulmuş gibi mobil uygulamaya erişir.',
                     style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
+                  if (widget.departureDate != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(20),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_today, size: 14, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Çıkış: ${DateFormat('dd.MM.yyyy').format(widget.departureDate!)}',
+                            style: const TextStyle(color: AppColors.primary, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   _field('Ad Soyad *', _fullNameCtrl, required: true),
                   const SizedBox(height: 12),
@@ -119,13 +229,35 @@ class _AddParticipantScreenState extends State<AddParticipantScreen> {
                   _field('Telefon *', _phoneCtrl, keyboard: TextInputType.phone, required: true),
                   const SizedBox(height: 12),
                   _field(
-                    'E-posta (ID) *',
-                    _emailCtrl,
-                    keyboard: TextInputType.emailAddress,
+                    'Müşteri ID *',
+                    _participantIdCtrl,
                     required: true,
+                    onChanged: (_) => setState(() {}),
+                    helperText: _generatedLoginEmail.isEmpty
+                        ? 'Sistem giriş tanımlayıcısını otomatik üretir.'
+                        : 'Giriş tanımlayıcısı: $_generatedLoginEmail',
+                    validator: (value) {
+                      final participantId = AuthService.normalizePanelLoginId(value ?? '');
+                      if (participantId.isEmpty) return 'Müşteri ID zorunlu';
+                      if (!RegExp(r'^[A-Z0-9-]+$').hasMatch(participantId)) {
+                        return 'Sadece harf, rakam ve tire kullanın';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 12),
-                  _field('Şifre *', _passwordCtrl, obscure: true, required: true),
+                  _field(
+                    'Şifre *',
+                    _passwordCtrl,
+                    obscure: true,
+                    required: true,
+                    validator: (value) {
+                      final password = (value ?? '').trim();
+                      if (password.isEmpty) return 'Şifre zorunlu';
+                      if (password.length < 6) return 'En az 6 karakter girin';
+                      return null;
+                    },
+                  ),
                   const SizedBox(height: 12),
                   _field('Ödenen Tutar (₺)', _priceCtrl, keyboard: TextInputType.number),
                   const SizedBox(height: 24),
@@ -164,14 +296,21 @@ class _AddParticipantScreenState extends State<AddParticipantScreen> {
     TextInputType keyboard = TextInputType.text,
     bool obscure = false,
     bool required = false,
+    String? helperText,
+    String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
   }) {
     return TextFormField(
       controller: ctrl,
       keyboardType: keyboard,
       obscureText: obscure,
-      validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null : null,
+      onChanged: onChanged,
+      validator:
+          validator ??
+          (required ? (v) => (v == null || v.trim().isEmpty) ? 'Zorunlu alan' : null : null),
       decoration: InputDecoration(
         labelText: label,
+        helperText: helperText,
         isDense: true,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),

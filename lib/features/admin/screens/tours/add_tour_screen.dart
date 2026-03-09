@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/tour_model.dart';
+import '../../../../core/services/tour_image_upload_service.dart';
 import '../../controllers/admin_tour_controller.dart';
 
 class AddTourScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class AddTourScreen extends StatefulWidget {
 
 class _AddTourScreenState extends State<AddTourScreen> {
   late final AdminTourController _controller;
+  final _imageUploadService = TourImageUploadService();
   final _formKey = GlobalKey<FormState>();
 
   // Temel Bilgiler
@@ -45,6 +47,8 @@ class _AddTourScreenState extends State<AddTourScreen> {
 
   String _selectedRegion = 'Marmara';
   bool _isLoading = false;
+  bool _isUploadingImage = false;
+  String? _uploadedImageFileName;
 
   static const _regions = [
     'Akdeniz',
@@ -175,6 +179,11 @@ class _AddTourScreenState extends State<AddTourScreen> {
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_isUploadingImage) {
+      _showSnackBar('Görsel yükleme devam ediyor. Lütfen bekleyin.', isError: true);
+      return;
+    }
+
     if (_selectedDepartureDays.isEmpty && _selectedDates.isEmpty) {
       _showSnackBar('En az bir çıkış günü veya özel tarih seçmelisiniz.', isError: true);
       return;
@@ -182,6 +191,10 @@ class _AddTourScreenState extends State<AddTourScreen> {
 
     setState(() => _isLoading = true);
     try {
+      final normalizedDates =
+          _selectedDates.map((date) => DateTime(date.year, date.month, date.day)).toSet().toList()
+            ..sort();
+
       final tour = TourModel(
         title: _titleCtrl.text.trim(),
         description: _descriptionCtrl.text.trim(),
@@ -202,13 +215,13 @@ class _AddTourScreenState extends State<AddTourScreen> {
         program: _buildProgram(),
         departureDays: List.from(_selectedDepartureDays),
         departureTime: _departureTimeCtrl.text.trim(),
-        departureDates: _selectedDates.isNotEmpty ? List.from(_selectedDates) : null,
+        departureDates: normalizedDates.isNotEmpty ? normalizedDates : null,
         seriesId: 'series_${DateTime.now().microsecondsSinceEpoch}',
       );
 
-      await _controller.addTour(tour);
+      final createdIds = await _controller.addTourSeries(tour);
       if (!mounted) return;
-      _showSnackBar('Tur başarıyla eklendi.');
+      _showSnackBar('${createdIds.length} çıkış tarihi için tur oluşturuldu.');
       _clearForm();
     } catch (e) {
       _showSnackBar('Hata: $e', isError: true);
@@ -239,7 +252,71 @@ class _AddTourScreenState extends State<AddTourScreen> {
       _selectedDepartureDays.clear();
       _selectedDates.clear();
       _selectedRegion = 'Marmara';
+      _uploadedImageFileName = null;
     });
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    if (_isUploadingImage || _isLoading) return;
+
+    setState(() => _isUploadingImage = true);
+    try {
+      final uploaded = await _imageUploadService.pickAndUpload(
+        companyId: widget.companyId,
+        uploaderRole: 'admin',
+      );
+
+      if (uploaded == null) return;
+
+      if (_imageUrlCtrl.text.trim().isNotEmpty) {
+        await _imageUploadService.deleteByUrl(_imageUrlCtrl.text.trim());
+      }
+
+      setState(() {
+        _imageUrlCtrl.text = uploaded.downloadUrl;
+        _uploadedImageFileName = uploaded.fileName;
+      });
+
+      _showSnackBar('Görsel Firebase Storage alanına yüklendi.');
+    } catch (e) {
+      _showSnackBar(_friendlyUploadError(e), isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+      }
+    }
+  }
+
+  Future<void> _removeUploadedImage() async {
+    final existingUrl = _imageUrlCtrl.text.trim();
+    if (existingUrl.isEmpty) return;
+
+    setState(() => _isUploadingImage = true);
+    try {
+      await _imageUploadService.deleteByUrl(existingUrl);
+      setState(() {
+        _imageUrlCtrl.clear();
+        _uploadedImageFileName = null;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+      }
+    }
+  }
+
+  String _friendlyUploadError(Object error) {
+    final message = error.toString();
+    if (message.contains('object-not-found')) {
+      return 'Yüklenen görsel Firebase Storage üzerinde bulunamadı.';
+    }
+    if (message.contains('unauthorized') || message.contains('permission-denied')) {
+      return 'Firebase Storage yazma izni yok. Storage kuralları veya bucket ayarı kontrol edilmeli.';
+    }
+    if (message.contains('bucket-not-found')) {
+      return 'Firebase Storage bucket bulunamadı. Firebase tarafında Storage etkinleştirilmeli.';
+    }
+    return 'Görsel yüklenemedi: $message';
   }
 
   void _showSnackBar(String msg, {bool isError = false}) {
@@ -329,7 +406,7 @@ class _AddTourScreenState extends State<AddTourScreen> {
             ),
             _field('Şehir *', _cityCtrl, width: 250, required: true),
             _regionDropdown(),
-            _field('Görsel URL', _imageUrlCtrl, width: 350),
+            _buildImageUploadField(),
             _field('Rehber Adı', _guideNameCtrl, width: 250),
             _field(
               'Çıkış Saati *',
@@ -560,6 +637,70 @@ class _AddTourScreenState extends State<AddTourScreen> {
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
+      ),
+    );
+  }
+
+  Widget _buildImageUploadField() {
+    final hasImage = _imageUrlCtrl.text.trim().isNotEmpty;
+    return SizedBox(
+      width: 350,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _isUploadingImage ? null : _pickAndUploadImage,
+            icon: _isUploadingImage
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.upload_file),
+            label: Text(_isUploadingImage ? 'Yükleniyor...' : 'Görsel Ekle'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasImage
+                ? (_uploadedImageFileName ?? 'Firebase Storage görseli hazır')
+                : 'Dosya seçildiğinde bilgisayarınızdaki pencere açılır ve görsel Firebase Storage alanına yüklenir.',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
+          if (hasImage) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(
+                _imageUrlCtrl.text.trim(),
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  height: 150,
+                  color: AppColors.background,
+                  alignment: Alignment.center,
+                  child: const Text('Görsel önizlemesi alınamadı'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    _imageUrlCtrl.text.trim(),
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _isUploadingImage ? null : _removeUploadedImage,
+                  icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                  tooltip: 'Görseli kaldır',
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

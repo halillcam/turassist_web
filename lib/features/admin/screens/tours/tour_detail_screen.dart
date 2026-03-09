@@ -7,13 +7,16 @@ import '../../../../core/constants/app_strings.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/models/tour_model.dart';
 import '../../../../core/models/user_model.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
 import '../../controllers/admin_tour_controller.dart';
+import 'tour_communication_screen.dart';
 
 class TourDetailScreen extends StatefulWidget {
   final String tourId;
+  final DateTime? departureDate;
 
-  const TourDetailScreen({super.key, required this.tourId});
+  const TourDetailScreen({super.key, required this.tourId, this.departureDate});
 
   @override
   State<TourDetailScreen> createState() => _TourDetailScreenState();
@@ -63,6 +66,32 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (widget.departureDate != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(20),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.primary.withAlpha(60)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_today, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Seçilen Çıkış Tarihi: ${DateFormat('dd.MM.yyyy').format(widget.departureDate!)}',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 _buildActionButtons(tour),
                 const SizedBox(height: 24),
                 _buildInfoCard(tour),
@@ -94,13 +123,21 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
           AppStrings.participants,
           Icons.people,
           AppColors.primary,
-          () => Navigator.pushNamed(context, AppRoutes.participantsList, arguments: tour.id),
+          () => Navigator.pushNamed(
+            context,
+            AppRoutes.participantsList,
+            arguments: {'tourId': tour.id, 'departureDate': widget.departureDate},
+          ),
         ),
         _actionButton(
           AppStrings.addParticipant,
           Icons.person_add,
           AppColors.success,
-          () => Navigator.pushNamed(context, AppRoutes.addParticipant, arguments: tour.id),
+          () => Navigator.pushNamed(
+            context,
+            AppRoutes.addParticipant,
+            arguments: {'tourId': tour.id, 'departureDate': widget.departureDate},
+          ),
         ),
         _actionButton(
           tour.guideId.isEmpty ? AppStrings.addGuide : AppStrings.editGuide,
@@ -115,6 +152,18 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
           Icons.edit,
           AppColors.primaryLight,
           () => Navigator.pushNamed(context, AppRoutes.updateTour, arguments: tour.id),
+        ),
+        _actionButton(
+          'Mesajlar',
+          Icons.forum_outlined,
+          AppColors.info,
+          () => _openCommunication(tour, initialTabIndex: 0),
+        ),
+        _actionButton(
+          'Duyurular',
+          Icons.campaign_outlined,
+          AppColors.secondary,
+          () => _openCommunication(tour, initialTabIndex: 1),
         ),
         _actionButton(
           tour.isDeleted ? AppStrings.active : AppStrings.passive,
@@ -173,6 +222,21 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
     );
   }
 
+  void _openCommunication(TourModel tour, {required int initialTabIndex}) {
+    final tourId = tour.id;
+    if (tourId == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TourCommunicationScreen(
+          tourId: tourId,
+          tourTitle: tour.title,
+          initialTabIndex: initialTabIndex,
+        ),
+      ),
+    );
+  }
+
   Widget _buildInfoCard(TourModel tour) {
     return Card(
       child: Padding(
@@ -214,6 +278,8 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
       future: tour.guideId.isEmpty ? Future.value(null) : _controller.getUserByUid(tour.guideId),
       builder: (context, snapshot) {
         final guide = snapshot.data;
+        final usesGuideLoginId =
+            guide != null && AuthService.isGeneratedGuideLoginEmail(guide.email);
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -240,7 +306,11 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                     children: [
                       _infoItem('Ad Soyad', guide.fullName),
                       _infoItem('Telefon', guide.phone.isEmpty ? '-' : guide.phone),
-                      _infoItem('E-posta', guide.email),
+                      _infoItem(
+                        usesGuideLoginId ? 'Guide ID' : 'E-posta',
+                        usesGuideLoginId ? AuthService.extractGuideId(guide.email) : guide.email,
+                      ),
+                      _passwordItem('Giriş Parolası', guide.guidePassword),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -258,13 +328,21 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                         icon: Icon(guide.isDeleted ? Icons.visibility : Icons.visibility_off),
                         label: Text(guide.isDeleted ? AppStrings.activate : AppStrings.deactivate),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: () => _sendGuidePasswordReset(guide),
-                        icon: const Icon(Icons.lock_reset),
-                        label: const Text(AppStrings.sendPasswordReset),
-                      ),
+                      if (!usesGuideLoginId)
+                        OutlinedButton.icon(
+                          onPressed: () => _sendGuidePasswordReset(guide),
+                          icon: const Icon(Icons.lock_reset),
+                          label: const Text(AppStrings.sendPasswordReset),
+                        ),
                     ],
                   ),
+                  if (usesGuideLoginId) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Bu hesap için e-posta doğrulaması ve şifre sıfırlama maili kullanılmaz.',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -382,6 +460,17 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
   }
 
   Future<void> _sendGuidePasswordReset(UserModel guide) async {
+    if (AuthService.isGeneratedGuideLoginEmail(guide.email)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bu guide hesabı için şifre sıfırlama maili kullanılmaz.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
     try {
       await _controller.sendPasswordResetEmail(guide.email);
       if (!mounted) return;
@@ -402,6 +491,17 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
   Future<void> _showGuideEditor(TourModel tour, {UserModel? guide}) {
     final fullNameCtrl = TextEditingController(text: guide?.fullName ?? tour.guideName ?? '');
     final phoneCtrl = TextEditingController(text: guide?.phone ?? '');
+    final newPasswordCtrl = TextEditingController();
+    final loginIdentifier = guide == null
+        ? ''
+        : AuthService.isGeneratedGuideLoginEmail(guide.email)
+        ? AuthService.extractGuideId(guide.email)
+        : guide.email;
+    final loginIdentifierLabel = guide == null
+        ? 'Guide ID'
+        : AuthService.isGeneratedGuideLoginEmail(guide.email)
+        ? 'Guide ID'
+        : 'Giriş E-postası';
 
     return showDialog<void>(
       context: context,
@@ -424,9 +524,33 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
               if (guide != null) ...[
                 const SizedBox(height: 12),
                 TextField(
-                  controller: TextEditingController(text: guide.email),
+                  controller: TextEditingController(text: loginIdentifier),
                   enabled: false,
-                  decoration: const InputDecoration(labelText: 'Giriş E-postası'),
+                  decoration: InputDecoration(labelText: loginIdentifierLabel),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _PasswordInfoItem(
+                    label: 'Mevcut Giriş Parolası',
+                    password: guide.guidePassword,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: newPasswordCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Yeni Giriş Parolası',
+                    hintText: guide.guidePassword != null
+                        ? 'Boş bırakırsanız parola değişmez'
+                        : 'Mevcut parola kayıtlı değil',
+                    helperText: guide.guidePassword == null
+                        ? 'Bu hesabın parolası yönetim sistemine kaydedilmemiş, değiştirilemiyor.'
+                        : null,
+                    helperMaxLines: 2,
+                    enabled: guide.guidePassword != null,
+                  ),
                 ),
               ],
             ],
@@ -446,6 +570,26 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                       'phone': phoneCtrl.text.trim(),
                     });
                     await _controller.updateTour(tour.id!, {'guideName': fullNameCtrl.text.trim()});
+                    final newPwd = newPasswordCtrl.text.trim();
+                    if (newPwd.isNotEmpty && guide.guidePassword != null) {
+                      try {
+                        await _controller.updateGuidePassword(
+                          guideId: guide.uid!,
+                          guideEmail: guide.email,
+                          currentPassword: guide.guidePassword!,
+                          newPassword: newPwd,
+                        );
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Parola güncellenemedi: $e'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                        }
+                      }
+                    }
                     if (!mounted) return;
                     Navigator.pop(context);
                     setState(() {});
@@ -457,6 +601,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
     ).whenComplete(() {
       fullNameCtrl.dispose();
       phoneCtrl.dispose();
+      newPasswordCtrl.dispose();
     });
   }
 
@@ -506,6 +651,62 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
         ),
         const SizedBox(height: 2),
         Text(value, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+      ],
+    );
+  }
+
+  Widget _passwordItem(String label, String? password) {
+    return _PasswordInfoItem(label: label, password: password);
+  }
+}
+
+class _PasswordInfoItem extends StatefulWidget {
+  final String label;
+  final String? password;
+
+  const _PasswordInfoItem({required this.label, this.password});
+
+  @override
+  State<_PasswordInfoItem> createState() => _PasswordInfoItemState();
+}
+
+class _PasswordInfoItemState extends State<_PasswordInfoItem> {
+  bool _visible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final display = widget.password != null ? (_visible ? widget.password! : '••••••••') : '---';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          widget.label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(display, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+            if (widget.password != null) ...[
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () => setState(() => _visible = !_visible),
+                borderRadius: BorderRadius.circular(4),
+                child: Icon(
+                  _visible ? Icons.visibility_off : Icons.visibility,
+                  size: 16,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ],
+        ),
       ],
     );
   }

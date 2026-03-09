@@ -149,34 +149,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       isLoading: _isLoading,
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Test Navigasyonu',
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => Navigator.pushNamed(context, AppRoutes.adminDashboard),
-                          icon: const Icon(Icons.admin_panel_settings, size: 18),
-                          label: const Text('Admin UI'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () =>
-                              Navigator.pushNamed(context, AppRoutes.superAdminDashboard),
-                          icon: const Icon(Icons.shield, size: 18),
-                          label: const Text('Super Admin UI'),
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import '../../../core/models/ticket_model.dart';
+import '../../../core/models/tour_communication_item.dart';
 import '../../../core/models/tour_model.dart';
 import '../../../core/models/user_model.dart';
 import '../services/admin_tour_service.dart';
@@ -15,6 +16,12 @@ class AdminTourController extends GetxController {
 
   Stream<TourModel?> streamTour(String tourId) => _service.streamTour(tourId);
 
+  Stream<List<TourCommunicationItem>> streamTourMessages(String tourId) =>
+      _service.streamTourMessages(tourId);
+
+  Stream<List<TourCommunicationItem>> streamTourAnnouncements(String tourId) =>
+      _service.streamTourAnnouncements(tourId);
+
   Stream<List<TicketModel>> streamTourTickets(String tourId) => _service.streamTourTickets(tourId);
 
   Stream<int> streamUnreadNotificationCount(String companyId) =>
@@ -23,6 +30,8 @@ class AdminTourController extends GetxController {
   Future<String?> getCurrentCompanyId() => _service.getCurrentCompanyId();
 
   Future<String> addTour(TourModel tour) => _service.addTour(tour);
+
+  Future<List<String>> addTourSeries(TourModel tour) => _service.addTourSeries(tour);
 
   Future<void> updateTour(String tourId, Map<String, dynamic> data) =>
       _service.updateTour(tourId, data);
@@ -35,7 +44,7 @@ class AdminTourController extends GetxController {
   Future<TourModel?> getTour(String tourId) => _service.getTour(tourId);
 
   Future<void> addParticipantToTour({
-    required String email,
+    required String loginId,
     required String password,
     required String fullName,
     required String phone,
@@ -45,7 +54,7 @@ class AdminTourController extends GetxController {
     required double pricePaid,
     DateTime? departureDate,
   }) => _service.addParticipantToTour(
-    email: email,
+    loginId: loginId,
     password: password,
     fullName: fullName,
     phone: phone,
@@ -57,14 +66,14 @@ class AdminTourController extends GetxController {
   );
 
   Future<void> addGuideToTour({
-    required String email,
+    required String guideId,
     required String password,
     required String fullName,
     required String phone,
     required String tourId,
     required String companyId,
   }) => _service.addGuideToTour(
-    email: email,
+    guideId: guideId,
     password: password,
     fullName: fullName,
     phone: phone,
@@ -84,6 +93,18 @@ class AdminTourController extends GetxController {
       _service.setGuideActive(guideId, isActive: isActive);
 
   Future<void> sendPasswordResetEmail(String email) => _service.sendPasswordResetEmail(email);
+
+  Future<void> updateGuidePassword({
+    required String guideId,
+    required String guideEmail,
+    required String currentPassword,
+    required String newPassword,
+  }) => _service.updateGuidePassword(
+    guideId: guideId,
+    guideEmail: guideEmail,
+    currentPassword: currentPassword,
+    newPassword: newPassword,
+  );
 
   Future<void> approveTourCompletion({
     required String requestId,
