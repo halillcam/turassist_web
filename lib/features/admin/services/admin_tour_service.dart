@@ -88,6 +88,7 @@ class AdminTourService {
         price: templateTour.price,
         imageUrl: templateTour.imageUrl,
         companyId: templateTour.companyId,
+        companyName: templateTour.companyName,
         guideId: templateTour.guideId,
         guideName: templateTour.guideName,
         capacity: templateTour.capacity,
@@ -121,6 +122,12 @@ class AdminTourService {
 
   Future<void> setTourActive(String tourId, {required bool isActive}) {
     return _firestore.collection('tours').doc(tourId).update({'isDeleted': !isActive});
+  }
+
+  /// Şirket adını getirir; bulunamazsa boş string döner.
+  Future<String> getCompanyName(String companyId) async {
+    final doc = await _firestore.collection('companies').doc(companyId).get();
+    return doc.data()?['companyName'] as String? ?? '';
   }
 
   /// Tek tur getirir; bulunamazsa null döner.

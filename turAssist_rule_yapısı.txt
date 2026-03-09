@@ -1,0 +1,22 @@
+--------------- super_admin ------------------
+
+her şeye erişir her şeyi düzenleyebilir
+
+---------------- admin ----------------
+Tur ekleyebilir güncelleyebilir silebilir, katılımcı ve rehber ekleyebilir tur programlarını düzenleyebilir
+
+
+------------------ customer ------------------------
+
+tur satın alabilir tur iptal edebilir, tur satın aldığında kendisine ve tur a özel qr oluşturulur.
+qr ı okuttuğunda aktif tur detaylarını görebilir messages bölümünü kullanarak chat yapabilir
+
+
+------------------ guide -------------------------
+
+kendisine atanan turda QR taraması yapabilir, isScanned true olan customer lara bildirim ve mesaj gönderebilir.
+tur u bitir isteğinde bulunabilir
+
+
+---------------- guest ----------------------
+şehir seçimi yapabilir tur detaylarını görebilir ama satın alamaz. satın alabilmesi için giriş yapması gerekir.

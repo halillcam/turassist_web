@@ -29,6 +29,8 @@ class AdminTourController extends GetxController {
 
   Future<String?> getCurrentCompanyId() => _service.getCurrentCompanyId();
 
+  Future<String> getCompanyName(String companyId) => _service.getCompanyName(companyId);
+
   Future<String> addTour(TourModel tour) => _service.addTour(tour);
 
   Future<List<String>> addTourSeries(TourModel tour) => _service.addTourSeries(tour);

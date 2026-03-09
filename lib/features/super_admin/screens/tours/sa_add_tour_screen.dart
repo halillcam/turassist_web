@@ -178,6 +178,9 @@ class _SaAddTourScreenState extends State<SaAddTourScreen> {
 
     setState(() => _isLoading = true);
     try {
+      final company = await _service.getCompany(widget.companyId);
+      final companyName = company?.companyName ?? '';
+
       final tour = TourModel(
         title: _titleCtrl.text.trim(),
         description: _descriptionCtrl.text.trim(),
@@ -185,6 +188,7 @@ class _SaAddTourScreenState extends State<SaAddTourScreen> {
         price: double.tryParse(_priceCtrl.text) ?? 0,
         imageUrl: _imageUrlCtrl.text.trim(),
         companyId: widget.companyId,
+        companyName: companyName,
         guideName: _guideNameCtrl.text.trim().isEmpty ? null : _guideNameCtrl.text.trim(),
         capacity: int.tryParse(_capacityCtrl.text) ?? 0,
         city: _cityCtrl.text.trim(),

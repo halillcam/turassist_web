@@ -91,6 +91,9 @@ class TourModel {
   /// Aynı turun farklı tarihlere ait instance'larını gruplamak için.
   final String? seriesId;
 
+  /// Turun ait olduğu şirketin gösterim adı.
+  final String companyName;
+
   TourModel({
     this.id,
     required this.title,
@@ -99,6 +102,7 @@ class TourModel {
     required this.price,
     required this.imageUrl,
     required this.companyId,
+    this.companyName = '',
     this.guideId = '',
     this.guideName,
     required this.capacity,
@@ -124,6 +128,7 @@ class TourModel {
       price: (map['price'] ?? 0).toDouble(),
       imageUrl: map['imageUrl'] ?? '',
       companyId: map['companyId'] ?? '',
+      companyName: map['companyName'] ?? '',
       guideId: map['guideId'] ?? '',
       guideName: map['guideName'],
       capacity: map['capacity'] ?? 0,
@@ -159,6 +164,7 @@ class TourModel {
       'price': price,
       'imageUrl': imageUrl,
       'companyId': companyId,
+      'companyName': companyName,
       'guideId': guideId,
       'guideName': guideName,
       'capacity': capacity,

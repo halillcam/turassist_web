@@ -47,6 +47,10 @@ service cloud.firestore {
       return currentRole() == 'guide';
     }
 
+    function isCustomer() {
+      return currentRole() == 'customer';
+    }
+
     function belongsToCurrentCompany(companyId) {
       return isSignedIn() && currentCompanyId() == companyId;
     }
@@ -137,7 +141,15 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if canReadTours();
 
-        allow create, update, delete: if isSuperAdmin() ||
+        // Customers can post messages (chat) in tours they are participating in.
+        // The isScanned enforcement is handled at the app layer since Firestore
+        // rules cannot query tickets by userId+tourId without a known doc ID.
+        allow create: if isSuperAdmin() ||
+          (isAdmin() && tourDoc(tourId).companyId == currentCompanyId()) ||
+          isGuideForTour(tourId) ||
+          isCustomer();
+
+        allow update, delete: if isSuperAdmin() ||
           (isAdmin() && tourDoc(tourId).companyId == currentCompanyId()) ||
           isGuideForTour(tourId);
       }
@@ -162,7 +174,14 @@ service cloud.firestore {
         (isAdmin() &&
           request.resource.data.companyId == currentCompanyId() &&
           hasTour(request.resource.data.tourId) &&
-          tourDoc(request.resource.data.tourId).companyId == currentCompanyId());
+          tourDoc(request.resource.data.tourId).companyId == currentCompanyId()) ||
+        // Customer self-purchase: ticket must belong to the buyer, tour must exist,
+        // companyId must match the tour, and ticket starts un-scanned.
+        (isCustomer() &&
+          request.resource.data.userId == request.auth.uid &&
+          hasTour(request.resource.data.tourId) &&
+          request.resource.data.companyId == tourDoc(request.resource.data.tourId).companyId &&
+          request.resource.data.isScanned == false);
 
       allow update: if isSuperAdmin() ||
         (isAdmin() &&
@@ -173,7 +192,16 @@ service cloud.firestore {
         (isGuideForTour(resource.data.tourId) &&
           request.resource.data.companyId == resource.data.companyId &&
           request.resource.data.tourId == resource.data.tourId &&
-          request.resource.data.userId == resource.data.userId);
+          request.resource.data.userId == resource.data.userId) ||
+        // Customer can cancel their own ticket (status → 'cancelled');
+        // all other fields must remain unchanged.
+        (isCustomer() &&
+          isSelf(resource.data.userId) &&
+          request.resource.data.status == 'cancelled' &&
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.tourId == resource.data.tourId &&
+          request.resource.data.companyId == resource.data.companyId &&
+          request.resource.data.isScanned == resource.data.isScanned);
 
       allow delete: if isSuperAdmin() ||
         (isAdmin() && resource.data.companyId == currentCompanyId());
@@ -183,8 +211,13 @@ service cloud.firestore {
     match /notifications/{notifId} {
       allow read: if isSuperAdmin() || canViewCompany(resource.data.targetCompanyId);
 
-      allow create: if isSuperAdmin() &&
-        request.resource.data.senderRole == 'super_admin';
+      allow create: if
+        (isSuperAdmin() && request.resource.data.senderRole == 'super_admin') ||
+        // Guide can broadcast notifications to their own company (e.g. to scanned
+        // customers on their tour). targetCompanyId must match the guide's company.
+        (isGuide() &&
+          request.resource.data.senderRole == 'guide' &&
+          request.resource.data.targetCompanyId == currentCompanyId());
 
       allow update: if isSuperAdmin() ||
         (canViewCompany(resource.data.targetCompanyId) &&
