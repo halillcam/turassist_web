@@ -4,12 +4,12 @@ import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../completion/presentation/controllers/completion_controller.dart';
 import '../../../feedback/presentation/controllers/feedback_controller.dart';
-import '../../../guides/presentation/controllers/guide_controller.dart';
+import '../../../guides/presentation/bindings/guide_binding.dart';
 import '../../../notifications/presentation/controllers/notification_controller.dart';
-import '../../../participants/presentation/controllers/participant_controller.dart';
+import '../../../participants/presentation/bindings/participant_binding.dart';
 import '../../../communication/presentation/controllers/communication_controller.dart';
 import '../../../tours/presentation/bindings/tour_binding.dart';
-import '../../../users/presentation/controllers/user_controller.dart';
+import '../../../users/presentation/bindings/user_binding.dart';
 
 /// Admin dashboard rotasına girildiğinde kayıt edilmesi gereken tüm bağımlılıklar.
 ///
@@ -28,13 +28,13 @@ class AdminDashboardBinding extends Bindings {
     Get.lazyPut(() => CommunicationController(db: Get.find<FirestoreService>()), fenix: true);
 
     // Katılımcı işlemleri
-    Get.lazyPut(() => ParticipantController(db: Get.find<FirestoreService>()), fenix: true);
+    ParticipantBinding().dependencies();
 
     // Rehber işlemleri
-    Get.lazyPut(() => GuideController(db: Get.find<FirestoreService>()), fenix: true);
+    GuideBinding().dependencies();
 
     // Kullanıcı işlemleri (tur detayında rehber yönetimi için gerekir)
-    Get.lazyPut(() => UserController(db: Get.find<FirestoreService>()), fenix: true);
+    UserBinding().dependencies();
 
     // Bildirimler
     Get.lazyPut(() => NotificationController(db: Get.find<FirestoreService>()), fenix: true);

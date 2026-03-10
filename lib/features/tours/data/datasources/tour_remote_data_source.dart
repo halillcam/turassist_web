@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../../core/models/company_model.dart';
+import '../../../companies/data/models/company_dto.dart';
 import '../models/tour_dto.dart';
 
 abstract class ITourRemoteDataSource {
@@ -15,7 +15,7 @@ abstract class ITourRemoteDataSource {
   Future<void> deleteTour(String tourId);
   Future<void> setTourActive(String tourId, {required bool isActive});
   Future<String> getCompanyName(String companyId);
-  Future<List<CompanyModel>> getCompanies();
+  Future<List<CompanyDto>> getCompanies();
 }
 
 class TourRemoteDataSource implements ITourRemoteDataSource {
@@ -102,7 +102,8 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
       _tours.doc(tourId).update(data);
 
   @override
-  Future<void> deleteTour(String tourId) => _tours.doc(tourId).update({'isDeleted': true});
+  Future<void> deleteTour(String tourId) =>
+      _tours.doc(tourId).update({'isDeleted': true, 'imageUrl': ''});
 
   @override
   Future<void> setTourActive(String tourId, {required bool isActive}) =>
@@ -119,9 +120,9 @@ class TourRemoteDataSource implements ITourRemoteDataSource {
   }
 
   @override
-  Future<List<CompanyModel>> getCompanies() async {
+  Future<List<CompanyDto>> getCompanies() async {
     final snap = await _db.collection('companies').get();
-    return snap.docs.map((d) => CompanyModel.fromMap(d.data(), d.id)).toList();
+    return snap.docs.map((d) => CompanyDto.fromFirestore(d.data(), d.id)).toList();
   }
 
   /// Dto'daki kalkış gün ve tarih konfigürasyonundan somut DateTime listesi üretir.

@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasUserDoc() {
+      return isSignedIn() &&
+        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function currentUser() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function currentRole() {
+      return hasUserDoc() ? currentUser().role : '';
+    }
+
+    function currentCompanyId() {
+      return hasUserDoc() ? currentUser().companyId : '';
+    }
+
+    function isSuperAdmin() {
+      return currentRole() == 'super_admin';
+    }
+
+    function isAdmin() {
+      return currentRole() == 'admin';
+    }
+
+    function canReadTourImages() {
+      return hasUserDoc();
+    }
+
+    function canWriteCompanyTourImages(companyId) {
+      return isSuperAdmin() || (isAdmin() && currentCompanyId() == companyId);
+    }
+
+    match /tour_images/{companyId}/{fileName} {
+      allow read: if canReadTourImages();
+      allow create, update, delete: if canWriteCompanyTourImages(companyId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -18,12 +18,10 @@ class TourCompletionApprovalScreen extends StatefulWidget {
   const TourCompletionApprovalScreen({super.key, required this.companyId});
 
   @override
-  State<TourCompletionApprovalScreen> createState() =>
-      _TourCompletionApprovalScreenState();
+  State<TourCompletionApprovalScreen> createState() => _TourCompletionApprovalScreenState();
 }
 
-class _TourCompletionApprovalScreenState
-    extends State<TourCompletionApprovalScreen> {
+class _TourCompletionApprovalScreenState extends State<TourCompletionApprovalScreen> {
   late final CompletionController _controller;
 
   @override
@@ -40,14 +38,10 @@ class _TourCompletionApprovalScreenState
       builder: (_) => ConfirmationDialog(
         title: 'Tur Bitirme Onayi',
         message:
-            'Bu turu bitirmek istediginize emin misiniz?\nTur pasif hale gececek ve rehber silinecektir.',
+            'Bu turu bitirmek istediginize emin misiniz?\nSeriye bagli tum tur tarihleri pasife alinacak, ilgili rehber ve bu tura ait panel musterileri devre disi birakilacaktir.',
         onConfirm: () async {
           try {
-            await _controller.approve(
-              requestId: req.id!,
-              tourId: req.tourId,
-              guideId: req.guideId,
-            );
+            await _controller.approve(requestId: req.id!, tourId: req.tourId, guideId: req.guideId);
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -57,9 +51,9 @@ class _TourCompletionApprovalScreenState
             );
           } catch (e) {
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error));
           }
         },
       ),
@@ -84,9 +78,9 @@ class _TourCompletionApprovalScreenState
             );
           } catch (e) {
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Hata: $e'), backgroundColor: AppColors.error));
           }
         },
       ),
@@ -118,7 +112,7 @@ class _TourCompletionApprovalScreenState
             ),
             const SizedBox(height: 4),
             const Text(
-              'Tur sorumlusunun gonderdigi tur bitirme istekleri.',
+              'Tur sorumlusunun gonderdigi tur bitirme istekleri. Onay, ilgili seri ve bagli panel hesaplarini da pasife alir.',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 20),
@@ -145,7 +139,7 @@ class _TourCompletionApprovalScreenState
                 }
                 return ListView.separated(
                   itemCount: requests.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
                   itemBuilder: (context, index) => _RequestCard(
                     request: requests[index],
                     onApprove: _approve,
@@ -167,11 +161,7 @@ class _RequestCard extends StatelessWidget {
   final void Function(TourCompletionRequestModel) onApprove;
   final void Function(TourCompletionRequestModel) onReject;
 
-  const _RequestCard({
-    required this.request,
-    required this.onApprove,
-    required this.onReject,
-  });
+  const _RequestCard({required this.request, required this.onApprove, required this.onReject});
 
   @override
   Widget build(BuildContext context) {

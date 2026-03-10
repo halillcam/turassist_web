@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../guides/presentation/screens/sa_add_guide_screen.dart' as unified;
+import '../../../guides/presentation/screens/guide_add_screen.dart' as shared;
 
 /// Super Admin rotasi icin ince sunum sarmalayicisi.
 class SaAddGuideScreen extends StatelessWidget {
@@ -11,5 +11,5 @@ class SaAddGuideScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      unified.SaAddGuideScreen(tourId: tourId, companyId: companyId);
+      shared.GuideAddScreen(tourId: tourId, companyId: companyId);
 }

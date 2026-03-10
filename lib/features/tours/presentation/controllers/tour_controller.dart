@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/models/company_model.dart';
+import '../../../../core/services/tour_image_upload_service.dart';
+import '../../../companies/domain/entities/company_entity.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../domain/entities/tour_entity.dart';
@@ -32,6 +33,7 @@ class TourController extends GetxController {
   final ToggleTourActiveUseCase _toggleTourActive;
   final GetCompanyNameUseCase _getCompanyName;
   final GetCompaniesUseCase _getCompanies;
+  final TourImageUploadService _imageUploadService = TourImageUploadService();
 
   TourController({
     required StreamActiveToursUseCase streamActiveTours,
@@ -65,7 +67,7 @@ class TourController extends GetxController {
   final Rx<TourEntity?> selectedTour = Rx(null);
 
   // ─── Şirket seçimi (SuperAdmin için) ───────────────────────────────────────
-  final companies = <CompanyModel>[].obs;
+  final companies = <CompanyEntity>[].obs;
   final Rx<String?> selectedCompanyId = Rx(null);
 
   StreamSubscription? _activeSub;
@@ -188,16 +190,20 @@ class TourController extends GetxController {
     );
   }
 
-  Future<bool> deleteTour(String tourId) async {
+  Future<bool> deleteTour(TourEntity tour) async {
     isLoading.value = true;
-    final result = await _deleteTour(tourId);
+    final imageUrl = tour.imageUrl.trim();
+    final result = await _deleteTour(tour.id);
     isLoading.value = false;
     return result.fold(
       (failure) {
         _showError(failure.message);
         return false;
       },
-      (_) {
+      (_) async {
+        if (imageUrl.isNotEmpty) {
+          await _imageUploadService.deleteByUrl(imageUrl);
+        }
         _showSuccess('Tur silindi.');
         return true;
       },

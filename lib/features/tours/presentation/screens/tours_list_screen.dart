@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
-import '../../../../core/models/company_model.dart';
+import '../../../companies/domain/entities/company_entity.dart';
 import '../../domain/entities/tour_entity.dart';
 import '../controllers/tour_controller.dart';
 import 'tour_schedule_screen.dart';
@@ -98,7 +98,7 @@ class _ToursListScreenState extends State<ToursListScreen> with SingleTickerProv
             const SizedBox(width: 8),
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: selected,
+                initialValue: selected,
                 isExpanded: true,
                 decoration: InputDecoration(
                   isDense: true,
@@ -108,7 +108,8 @@ class _ToursListScreenState extends State<ToursListScreen> with SingleTickerProv
                 hint: const Text('Şirket seçin'),
                 items: companies
                     .map(
-                      (CompanyModel c) => DropdownMenuItem(value: c.id, child: Text(c.companyName)),
+                      (CompanyEntity c) =>
+                          DropdownMenuItem(value: c.id, child: Text(c.companyName)),
                     )
                     .toList(),
                 onChanged: (val) => _controller.selectCompany(val),
@@ -264,7 +265,7 @@ class _TourCard extends StatelessWidget {
                         width: 80,
                         height: 60,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _imagePlaceholder(),
+                        errorBuilder: (context, error, stackTrace) => _imagePlaceholder(),
                       )
                     : _imagePlaceholder(),
               ),

@@ -5,9 +5,9 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../../../core/models/user_model.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/widgets/confirmation_dialog.dart';
+import '../../../users/domain/entities/managed_user_entity.dart';
 import '../../../users/presentation/controllers/user_controller.dart';
 import '../../domain/entities/tour_entity.dart';
 import '../controllers/tour_controller.dart';
@@ -231,7 +231,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
         message: '"${tour.title}" turunu silmek istediğinize emin misiniz?',
         confirmText: 'Sil',
         onConfirm: () async {
-          await _controller.deleteTour(tour.id);
+          await _controller.deleteTour(tour);
           if (mounted) Navigator.pop(context);
         },
       ),
@@ -286,7 +286,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
   }
 
   Widget _buildGuideCard(TourEntity tour) {
-    return FutureBuilder<UserModel?>(
+    return FutureBuilder<ManagedUserEntity?>(
       future: tour.guideId.isEmpty
           ? Future.value(null)
           : _userController.getUserByUid(tour.guideId),
@@ -382,7 +382,6 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                 _infoItem('Şoför Adı', tour.busInfo.driverName),
                 _infoItem('Telefon', tour.busInfo.phoneNumber),
                 _infoItem('Plaka', tour.busInfo.plate),
-                _infoItem('Araç Kapasitesi', '${tour.busInfo.capacity}'),
               ],
             ),
           ],
@@ -459,12 +458,12 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
 
   // ─── Guide Management ─────────────────────────────────────────────────────
 
-  Future<void> _toggleGuideActive(UserModel guide) async {
+  Future<void> _toggleGuideActive(ManagedUserEntity guide) async {
     await _userController.toggleUserActive(guide.uid!, isActive: guide.isDeleted);
     if (mounted) setState(() {});
   }
 
-  Future<void> _sendGuidePasswordReset(UserModel guide) async {
+  Future<void> _sendGuidePasswordReset(ManagedUserEntity guide) async {
     if (AuthService.isGeneratedGuideLoginEmail(guide.email)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -492,7 +491,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
     }
   }
 
-  Future<void> _showGuideEditor(TourEntity tour, {UserModel? guide}) {
+  Future<void> _showGuideEditor(TourEntity tour, {ManagedUserEntity? guide}) {
     final fullNameCtrl = TextEditingController(text: guide?.fullName ?? tour.guideName ?? '');
     final phoneCtrl = TextEditingController(text: guide?.phone ?? '');
     final newPasswordCtrl = TextEditingController();

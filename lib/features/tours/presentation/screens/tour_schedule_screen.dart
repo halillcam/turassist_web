@@ -213,7 +213,7 @@ class _TourSummaryCard extends StatelessWidget {
                           width: 184,
                           height: 128,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _placeholder(),
+                          errorBuilder: (context, error, stackTrace) => _placeholder(),
                         )
                       : _placeholder(),
                 ),

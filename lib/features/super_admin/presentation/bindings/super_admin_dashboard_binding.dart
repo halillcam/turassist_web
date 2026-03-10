@@ -2,13 +2,13 @@ import 'package:get/get.dart';
 
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
-import '../../../companies/presentation/controllers/company_controller.dart';
+import '../../../companies/presentation/bindings/company_binding.dart';
 import '../../../feedback/presentation/controllers/feedback_controller.dart';
-import '../../../guides/presentation/controllers/guide_controller.dart';
+import '../../../guides/presentation/bindings/guide_binding.dart';
 import '../../../notifications/presentation/controllers/notification_controller.dart';
-import '../../../participants/presentation/controllers/participant_controller.dart';
+import '../../../participants/presentation/bindings/participant_binding.dart';
 import '../../../tours/presentation/bindings/tour_binding.dart';
-import '../../../users/presentation/controllers/user_controller.dart';
+import '../../../users/presentation/bindings/user_binding.dart';
 
 /// Super Admin dashboard rotasına girildiğinde kayıt edilmesi gereken tüm bağımlılıklar.
 ///
@@ -18,19 +18,19 @@ class SuperAdminDashboardBinding extends Bindings {
   @override
   void dependencies() {
     // Şirket yönetimi (merkezi — features/companies)
-    Get.lazyPut(() => CompanyController(db: Get.find<FirestoreService>()), fenix: true);
+    CompanyBinding().dependencies();
 
     // Kullanıcı yönetimi (merkezi — features/users)
-    Get.lazyPut(() => UserController(db: Get.find<FirestoreService>()), fenix: true);
+    UserBinding().dependencies();
 
     // Tur CRUD (merkezi — features/tours)
     TourBinding().dependencies();
 
     // Katılımcı işlemleri
-    Get.lazyPut(() => ParticipantController(db: Get.find<FirestoreService>()), fenix: true);
+    ParticipantBinding().dependencies();
 
     // Rehber işlemleri
-    Get.lazyPut(() => GuideController(db: Get.find<FirestoreService>()), fenix: true);
+    GuideBinding().dependencies();
 
     // Bildirimler
     Get.lazyPut(() => NotificationController(db: Get.find<FirestoreService>()), fenix: true);

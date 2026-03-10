@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
@@ -16,10 +18,19 @@ class UploadedTourImage {
 class TourImageUploadService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
+  static const _uploadTimeout = Duration(seconds: 25);
+  static const bool directUploadEnabled = false;
+  static const String directUploadDisabledReason =
+      'Bu projede Firebase Storage aktif değil. Spark planda harici görsel URL kullanın veya Storage için planı yükseltin.';
+
   Future<UploadedTourImage?> pickAndUpload({
     required String companyId,
     required String uploaderRole,
   }) async {
+    if (!directUploadEnabled) {
+      throw StateError(directUploadDisabledReason);
+    }
+
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: false,
@@ -51,14 +62,27 @@ class TourImageUploadService {
     );
 
     final ref = _storage.ref().child(storagePath);
-    await ref.putData(bytes, metadata);
-    final downloadUrl = await ref.getDownloadURL();
 
-    return UploadedTourImage(
-      downloadUrl: downloadUrl,
-      fileName: file.name,
-      storagePath: storagePath,
-    );
+    try {
+      await ref.putData(bytes, metadata).timeout(_uploadTimeout);
+      final downloadUrl = await ref.getDownloadURL().timeout(_uploadTimeout);
+
+      return UploadedTourImage(
+        downloadUrl: downloadUrl,
+        fileName: file.name,
+        storagePath: storagePath,
+      );
+    } on TimeoutException {
+      throw StateError('Firebase Storage yanıt vermedi. Projede Storage kurulmuş mu kontrol edin.');
+    } on FirebaseException catch (error) {
+      final message = error.message ?? '';
+      if (error.code == 'bucket-not-found' || message.contains('not been set up')) {
+        throw StateError(
+          'Firebase Storage bu projede henüz kurulmamış. Firebase Console > Storage > Get Started adımını tamamlayın.',
+        );
+      }
+      rethrow;
+    }
   }
 
   Future<void> deleteByUrl(String downloadUrl) async {

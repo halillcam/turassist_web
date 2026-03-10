@@ -1,0 +1,16 @@
+{
+   "version": "2.0.0",
+   "tasks": [
+      {
+         "label": "Firebase: Deploy Storage Rules",
+         "type": "shell",
+         "command": "firebase",
+         "args": [
+            "deploy",
+            "--only",
+            "storage"
+         ],
+         "problemMatcher": []
+      }
+   ]
+}

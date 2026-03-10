@@ -4,8 +4,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../../core/widgets/custom_button.dart';
-import '../../../../core/models/user_model.dart';
 import '../../../companies/presentation/controllers/company_controller.dart';
+import '../../../users/domain/entities/managed_user_entity.dart';
 import '../../../users/presentation/controllers/user_controller.dart';
 
 class UpdateCompanyScreen extends StatefulWidget {
@@ -43,7 +43,7 @@ class _UpdateCompanyScreenState extends State<UpdateCompanyScreen> {
 
       if (company.adminUid.isNotEmpty) {
         // Admin adi, UserController'in onbellekli listesinden bulunur
-        final UserModel? admin = Get.find<UserController>().allUsers.firstWhereOrNull(
+        final ManagedUserEntity? admin = Get.find<UserController>().allUsers.firstWhereOrNull(
           (u) => u.uid == company.adminUid,
         );
         if (admin != null && mounted) {

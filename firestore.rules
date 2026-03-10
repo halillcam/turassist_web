@@ -82,6 +82,63 @@ service cloud.firestore {
       return isGuide() && hasTour(tourId) && tourDoc(tourId).guideId == request.auth.uid;
     }
 
+    function isCustomerPurchaseCapacityDecrease() {
+      return isCustomer() &&
+        request.resource.data.capacity is int &&
+        resource.data.capacity is int &&
+        resource.data.capacity > 0 &&
+        request.resource.data.capacity == resource.data.capacity - 1 &&
+        request.resource.data.companyId == resource.data.companyId &&
+        request.resource.data.title == resource.data.title &&
+        request.resource.data.description == resource.data.description &&
+        request.resource.data.extraDetail == resource.data.extraDetail &&
+        request.resource.data.price == resource.data.price &&
+        request.resource.data.imageUrl == resource.data.imageUrl &&
+        request.resource.data.companyName == resource.data.companyName &&
+        request.resource.data.guideId == resource.data.guideId &&
+        request.resource.data.guideName == resource.data.guideName &&
+        request.resource.data.city == resource.data.city &&
+        request.resource.data.region == resource.data.region &&
+        request.resource.data.busInfo == resource.data.busInfo &&
+        request.resource.data.program == resource.data.program &&
+        request.resource.data.departureDays == resource.data.departureDays &&
+        request.resource.data.departureTime == resource.data.departureTime &&
+        request.resource.data.departureDate == resource.data.departureDate &&
+        request.resource.data.departureDates == resource.data.departureDates &&
+        request.resource.data.seriesId == resource.data.seriesId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.isDeleted == resource.data.isDeleted;
+    }
+
+    function isCustomerOwnTicketCreate() {
+      return isCustomer() &&
+        request.resource.data.userId == request.auth.uid &&
+        hasTour(request.resource.data.tourId) &&
+        request.resource.data.companyId == tourDoc(request.resource.data.tourId).companyId &&
+        (!request.resource.data.keys().hasAny(['isScanned']) ||
+          request.resource.data.isScanned == false) &&
+        (!request.resource.data.keys().hasAny(['status']) ||
+          request.resource.data.status in ['active', 'pending']);
+    }
+
+    function isCustomerOwnTicketCancel() {
+      return isCustomer() &&
+        isSelf(resource.data.userId) &&
+        request.resource.data.status == 'cancelled' &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.tourId == resource.data.tourId &&
+        request.resource.data.companyId == resource.data.companyId &&
+        request.resource.data.slotId == resource.data.slotId &&
+        request.resource.data.passengerName == resource.data.passengerName &&
+        request.resource.data.tcNo == resource.data.tcNo &&
+        request.resource.data.pricePaid == resource.data.pricePaid &&
+        request.resource.data.qrToken == resource.data.qrToken &&
+        request.resource.data.isScanned == resource.data.isScanned &&
+        request.resource.data.purchaseDate == resource.data.purchaseDate &&
+        request.resource.data.scannedAt == resource.data.scannedAt &&
+        request.resource.data.departureDate == resource.data.departureDate;
+    }
+
     function preservesOwnUserSecurityFields() {
       return request.resource.data.role == resource.data.role &&
         request.resource.data.companyId == resource.data.companyId &&
@@ -133,7 +190,13 @@ service cloud.firestore {
       allow create: if isSuperAdmin() ||
         (isAdmin() && request.resource.data.companyId == currentCompanyId());
 
-      allow update, delete: if isSuperAdmin() ||
+      allow update: if isSuperAdmin() ||
+        (isAdmin() &&
+          resource.data.companyId == currentCompanyId() &&
+          request.resource.data.companyId == resource.data.companyId) ||
+        isCustomerPurchaseCapacityDecrease();
+
+      allow delete: if isSuperAdmin() ||
         (isAdmin() &&
           resource.data.companyId == currentCompanyId() &&
           request.resource.data.companyId == resource.data.companyId);
@@ -177,11 +240,7 @@ service cloud.firestore {
           tourDoc(request.resource.data.tourId).companyId == currentCompanyId()) ||
         // Customer self-purchase: ticket must belong to the buyer, tour must exist,
         // companyId must match the tour, and ticket starts un-scanned.
-        (isCustomer() &&
-          request.resource.data.userId == request.auth.uid &&
-          hasTour(request.resource.data.tourId) &&
-          request.resource.data.companyId == tourDoc(request.resource.data.tourId).companyId &&
-          request.resource.data.isScanned == false);
+        isCustomerOwnTicketCreate();
 
       allow update: if isSuperAdmin() ||
         (isAdmin() &&
@@ -195,13 +254,7 @@ service cloud.firestore {
           request.resource.data.userId == resource.data.userId) ||
         // Customer can cancel their own ticket (status → 'cancelled');
         // all other fields must remain unchanged.
-        (isCustomer() &&
-          isSelf(resource.data.userId) &&
-          request.resource.data.status == 'cancelled' &&
-          request.resource.data.userId == resource.data.userId &&
-          request.resource.data.tourId == resource.data.tourId &&
-          request.resource.data.companyId == resource.data.companyId &&
-          request.resource.data.isScanned == resource.data.isScanned);
+        isCustomerOwnTicketCancel();
 
       allow delete: if isSuperAdmin() ||
         (isAdmin() && resource.data.companyId == currentCompanyId());
@@ -242,6 +295,29 @@ service cloud.firestore {
     }
 
     // ─── Tur Bitirme İstekleri ─────────────────────────────────────────────
+    match /tourCompletionRequests/{reqId} {
+      allow read: if isSuperAdmin() ||
+        (isAdmin() && resource.data.companyId == currentCompanyId()) ||
+        isSelf(resource.data.guideId);
+
+      allow create: if isGuide() &&
+        request.resource.data.guideId == request.auth.uid &&
+        guideOwnsTourRequest(
+          request.resource.data.tourId,
+          request.resource.data.companyId,
+        );
+
+      allow update: if isSuperAdmin() ||
+        (isAdmin() &&
+          resource.data.companyId == currentCompanyId() &&
+          request.resource.data.companyId == resource.data.companyId &&
+          request.resource.data.tourId == resource.data.tourId &&
+          request.resource.data.guideId == resource.data.guideId);
+
+      allow delete: if isSuperAdmin() ||
+        (isAdmin() && resource.data.companyId == currentCompanyId());
+    }
+
     match /tour_completion_requests/{reqId} {
       allow read: if isSuperAdmin() ||
         (isAdmin() && resource.data.companyId == currentCompanyId()) ||

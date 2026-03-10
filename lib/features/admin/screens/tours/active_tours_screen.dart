@@ -35,16 +35,26 @@ class _ActiveToursScreenState extends State<ActiveToursScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: const [
-              Icon(Icons.tour, color: AppColors.primary),
-              SizedBox(width: 8),
-              Text(AppStrings.activeTours,
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-            ]),
+            Row(
+              children: const [
+                Icon(Icons.tour, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text(
+                  AppStrings.activeTours,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             Expanded(
               child: Obx(() {
-                if (_controller.isLoading.value) return const Center(child: CircularProgressIndicator());
+                if (_controller.isLoading.value) {
+                  return const Center(child: CircularProgressIndicator());
+                }
                 final tours = _controller.activeTours;
                 if (tours.isEmpty) return const _EmptyTours();
                 return _TourGroupListView(groups: _groupTours(tours));
@@ -68,11 +78,19 @@ class _ActiveToursScreenState extends State<ActiveToursScreen> {
     }
     final groups = <_TourGroup>[];
     for (final instances in bySeries.values) {
-      instances.sort((a, b) => (a.departureDate ?? DateTime(9999)).compareTo(b.departureDate ?? DateTime(9999)));
+      instances.sort(
+        (a, b) => (a.departureDate ?? DateTime(9999)).compareTo(b.departureDate ?? DateTime(9999)),
+      );
       groups.add(_TourGroup(instances: instances));
     }
-    for (final t in standalone) groups.add(_TourGroup(instances: [t]));
-    groups.sort((a, b) => (b.representative.createdAt ?? DateTime(0)).compareTo(a.representative.createdAt ?? DateTime(0)));
+    for (final t in standalone) {
+      groups.add(_TourGroup(instances: [t]));
+    }
+    groups.sort(
+      (a, b) => (b.representative.createdAt ?? DateTime(0)).compareTo(
+        a.representative.createdAt ?? DateTime(0),
+      ),
+    );
     return groups;
   }
 }
@@ -83,10 +101,19 @@ class _TourGroup {
   TourEntity get representative => instances.first;
   List<DateTime> get allDates {
     final dates = <DateTime>{};
-    for (final t in instances) { if (t.departureDate != null) dates.add(t.departureDate!); }
-    if (instances.length == 1) { for (final d in instances.first.departureDates ?? []) dates.add(d); }
+    for (final t in instances) {
+      if (t.departureDate != null) {
+        dates.add(t.departureDate!);
+      }
+    }
+    if (instances.length == 1) {
+      for (final d in instances.first.departureDates ?? []) {
+        dates.add(d);
+      }
+    }
     return dates.toList()..sort();
   }
+
   bool get hasMultipleDates => allDates.length > 1;
 }
 
@@ -94,11 +121,17 @@ class _EmptyTours extends StatelessWidget {
   const _EmptyTours();
   @override
   Widget build(BuildContext context) => const Center(
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.tour, size: 64, color: AppColors.slate300),
-      SizedBox(height: 16),
-      Text('Aktif tur bulunmuyor.', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
-    ]),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.tour, size: 64, color: AppColors.slate300),
+        SizedBox(height: 16),
+        Text(
+          'Aktif tur bulunmuyor.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+        ),
+      ],
+    ),
   );
 }
 
@@ -118,12 +151,16 @@ class _TourGroupCard extends StatelessWidget {
 
   void _handleTap(BuildContext context) {
     final rep = group.representative;
-    Navigator.pushNamed(context, AppRoutes.toursSchedule, arguments: {
-      'companyId': rep.companyId,
-      'representativeTourId': rep.id,
-      'seriesId': rep.seriesId,
-      'isDeleted': false,
-    });
+    Navigator.pushNamed(
+      context,
+      AppRoutes.toursSchedule,
+      arguments: {
+        'companyId': rep.companyId,
+        'representativeTourId': rep.id,
+        'seriesId': rep.seriesId,
+        'isDeleted': false,
+      },
+    );
   }
 
   @override
@@ -138,44 +175,83 @@ class _TourGroupCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: tour.imageUrl.isNotEmpty
-                  ? Image.network(tour.imageUrl, width: 80, height: 60, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _placeholder())
-                  : _placeholder(),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(tour.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                const SizedBox(height: 4),
-                Text('${tour.city} - ${tour.region}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                const SizedBox(height: 6),
-                if (dates.isNotEmpty) _DatesRow(dates: dates, fmt: fmt),
-              ]),
-            ),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('${tour.price.toStringAsFixed(0)} TL',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 16)),
-              const SizedBox(height: 4),
-              Text('Kapasite: ${tour.capacity}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              if (group.instances.length > 1) ...[
-                const SizedBox(height: 4),
-                _SmallChip(color: AppColors.info, label: '${group.instances.length} tarih'),
-              ],
-            ]),
-            const SizedBox(width: 8),
-            Icon(group.hasMultipleDates ? Icons.calendar_month : Icons.chevron_right, color: AppColors.slate400),
-          ]),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: tour.imageUrl.isNotEmpty
+                    ? Image.network(
+                        tour.imageUrl,
+                        width: 80,
+                        height: 60,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => _placeholder(),
+                      )
+                    : _placeholder(),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tour.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${tour.city} - ${tour.region}',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                    const SizedBox(height: 6),
+                    if (dates.isNotEmpty) _DatesRow(dates: dates, fmt: fmt),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${tour.price.toStringAsFixed(0)} TL',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Kapasite: ${tour.capacity}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  if (group.instances.length > 1) ...[
+                    const SizedBox(height: 4),
+                    _SmallChip(color: AppColors.info, label: '${group.instances.length} tarih'),
+                  ],
+                ],
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                group.hasMultipleDates ? Icons.calendar_month : Icons.chevron_right,
+                color: AppColors.slate400,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _placeholder() => Container(width: 80, height: 60, color: AppColors.slate100,
-      child: const Icon(Icons.image, color: AppColors.slate400));
+  Widget _placeholder() => Container(
+    width: 80,
+    height: 60,
+    color: AppColors.slate100,
+    child: const Icon(Icons.image, color: AppColors.slate400),
+  );
 }
 
 class _DatesRow extends StatelessWidget {
@@ -184,10 +260,15 @@ class _DatesRow extends StatelessWidget {
   const _DatesRow({required this.dates, required this.fmt});
 
   @override
-  Widget build(BuildContext context) => Wrap(spacing: 4, runSpacing: 4, children: [
-    ...dates.take(4).map((d) => _SmallChip(color: AppColors.primary, label: fmt.format(d))),
-    if (dates.length > 4) _SmallChip(color: AppColors.slate500, label: '+${dates.length - 4} daha'),
-  ]);
+  Widget build(BuildContext context) => Wrap(
+    spacing: 4,
+    runSpacing: 4,
+    children: [
+      ...dates.take(4).map((d) => _SmallChip(color: AppColors.primary, label: fmt.format(d))),
+      if (dates.length > 4)
+        _SmallChip(color: AppColors.slate500, label: '+${dates.length - 4} daha'),
+    ],
+  );
 }
 
 class _SmallChip extends StatelessWidget {
@@ -199,6 +280,9 @@ class _SmallChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
     decoration: BoxDecoration(color: color.withAlpha(20), borderRadius: BorderRadius.circular(999)),
-    child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+    child: Text(
+      label,
+      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+    ),
   );
 }

@@ -1,29 +1,28 @@
 import 'package:get/get.dart';
 
-import '../../../../core/models/user_model.dart';
-import '../../../../core/services/auth_service.dart';
-import '../../../../core/services/firestore_service.dart';
+import '../../domain/usecases/add_guide_usecase.dart';
 
-/// Rehber (tur sorumlusu) ekleme ve yönetimi için merkezi GetX controller.
-///
-/// [AddGuideScreen] (hem admin hem SA) bu controller'ı kullanır.
-/// [FirestoreService] + [AuthService] core servisleri üzerinden çalışır;
-/// admin/super_admin servis dosyalarına bağımlılık yoktur.
 class GuideController extends GetxController {
-  final FirestoreService _db;
+  static const _guideEmailDomain = 'guide.turassist';
 
-  GuideController({required FirestoreService db}) : _db = db;
+  final AddGuideUseCase _addGuide;
 
-  // ─── Reaktif State ─────────────────────────────────────────────────────────
+  GuideController({required AddGuideUseCase addGuide}) : _addGuide = addGuide;
 
   final isLoading = false.obs;
 
-  // ─── Rehber Ekle ───────────────────────────────────────────────────────────
+  String normalizeGuideId(String rawValue) => rawValue.trim().toUpperCase();
 
-  /// Turu'a rehber ekler:
-  /// 1. Firebase Auth'ta rehber hesabı oluşturulur (mevcut oturum bozulmaz).
-  /// 2. `users` koleksiyonuna rehber dokümanı yazılır.
-  /// 3. İlgili tur dokümanı `guideId` ve `guideName` ile güncellenir.
+  String buildGuideLoginEmail(String rawValue) {
+    final normalized = normalizeGuideId(rawValue);
+    return normalized.isEmpty ? '' : '$normalized@$_guideEmailDomain';
+  }
+
+  bool isValidGuideId(String rawValue) {
+    final normalized = normalizeGuideId(rawValue);
+    return normalized.isNotEmpty && RegExp(r'^[A-Z0-9-]+$').hasMatch(normalized);
+  }
+
   Future<bool> addGuide({
     required String guideId,
     required String password,
@@ -34,50 +33,41 @@ class GuideController extends GetxController {
   }) async {
     isLoading.value = true;
     try {
-      final normalized = AuthService.normalizeGuideId(guideId);
-      final email = AuthService.buildGuideLoginEmail(normalized);
-
-      // Mevcut admin/SA oturumunu bozmadan ikincil Firebase App üzerinden
-      // yeni rehber hesabı oluşturulur
-      final uid = await AuthService.createSecondaryAuthUser(email, password);
-
-      final guide = UserModel(
-        uid: uid,
-        loginId: normalized,
-        email: email,
-        fullName: fullName,
-        phone: phone,
-        role: 'guide',
-        companyId: companyId,
-        guidePassword: password,
-        isDeleted: false,
+      final result = await _addGuide(
+        AddGuideParams(
+          guideId: guideId,
+          password: password,
+          fullName: fullName,
+          phone: phone,
+          tourId: tourId,
+          companyId: companyId,
+        ),
       );
-
-      await _db.setDocument('users', uid, guide.toMap());
-
-      // Tur dokümanına rehber ID'si ve adı eklenir
-      await _db.updateDocument('tours', tourId, {'guideId': uid, 'guideName': fullName});
-
+      result.fold((failure) => throw StateError(failure.message), (_) {});
       return true;
-    } catch (e) {
-      _showError(_friendlyError(e));
+    } catch (error) {
+      _showError(_friendlyError(error));
       return false;
     } finally {
       isLoading.value = false;
     }
   }
 
-  // ─── Yardımcılar ───────────────────────────────────────────────────────────
-
   String _friendlyError(Object error) {
     final msg = error.toString();
     if (msg.contains('email-already-in-use')) {
       return 'Bu Guide ID zaten kullanılıyor.';
     }
-    if (msg.contains('weak-password')) return 'Şifre en az 6 karakter olmalıdır.';
-    if (msg.contains('invalid-email')) return 'Guide ID formatı geçersiz.';
+    if (msg.contains('weak-password')) {
+      return 'Şifre en az 6 karakter olmalıdır.';
+    }
+    if (msg.contains('invalid-email')) {
+      return 'Guide ID formatı geçersiz.';
+    }
     return 'İşlem başarısız: $msg';
   }
 
-  void _showError(String msg) => Get.snackbar('Hata', msg, snackPosition: SnackPosition.BOTTOM);
+  void _showError(String msg) {
+    Get.snackbar('Hata', msg, snackPosition: SnackPosition.BOTTOM);
+  }
 }

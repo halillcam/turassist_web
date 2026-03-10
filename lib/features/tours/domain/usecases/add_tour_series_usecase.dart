@@ -9,6 +9,6 @@ class AddTourSeriesUseCase {
   const AddTourSeriesUseCase(this.repository);
 
   /// Her kalkış tarihi için ayrı döküman yaratır; ortak seriesId taşırlar.
-  /// Dönen List<String> oluşturulan döküman ID'lerini içerir.
+  /// Donen `List<String>` olusturulan dokuman ID'lerini icerir.
   Future<Either<Failure, List<String>>> call(TourEntity tour) => repository.addTourSeries(tour);
 }

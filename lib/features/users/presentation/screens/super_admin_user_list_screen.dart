@@ -3,9 +3,9 @@ import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../../../core/models/user_model.dart';
 import '../../../users/presentation/controllers/user_controller.dart';
 import '../../../companies/presentation/controllers/company_controller.dart';
+import '../../domain/entities/managed_user_entity.dart';
 
 class UserListScreen extends StatelessWidget {
   const UserListScreen({super.key});
@@ -198,7 +198,11 @@ class UserListScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showEditDialog(BuildContext context, UserController controller, UserModel user) {
+  Future<void> _showEditDialog(
+    BuildContext context,
+    UserController controller,
+    ManagedUserEntity user,
+  ) {
     return showDialog<void>(
       context: context,
       builder: (_) => _EditUserDialog(controller: controller, user: user),
@@ -240,7 +244,7 @@ class UserListScreen extends StatelessWidget {
 
 class _EditUserDialog extends StatefulWidget {
   final UserController controller;
-  final UserModel user;
+  final ManagedUserEntity user;
 
   const _EditUserDialog({required this.controller, required this.user});
 

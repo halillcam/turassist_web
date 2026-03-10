@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
-import '../../../../core/models/company_model.dart';
+import '../../../companies/domain/entities/company_entity.dart';
 import '../../../companies/presentation/controllers/company_controller.dart';
 
 class CompanyListScreen extends StatefulWidget {
@@ -68,7 +68,7 @@ class _CompanyListScreenState extends State<CompanyListScreen> with SingleTicker
 
 class _CompanyTab extends StatelessWidget {
   final String label;
-  final List<CompanyModel> companies;
+  final List<CompanyEntity> companies;
   final String emptyText;
 
   const _CompanyTab({required this.label, required this.companies, required this.emptyText});

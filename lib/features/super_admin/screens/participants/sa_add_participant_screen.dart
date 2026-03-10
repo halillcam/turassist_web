@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../participants/presentation/screens/sa_add_participant_screen.dart' as unified;
+import '../../../participants/presentation/screens/participant_add_screen.dart' as shared;
 
 /// Super Admin rotasi icin ince sunum sarmalayicisi.
 class SaAddParticipantScreen extends StatelessWidget {
@@ -16,7 +16,7 @@ class SaAddParticipantScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => unified.SaAddParticipantScreen(
+  Widget build(BuildContext context) => shared.ParticipantAddScreen(
     tourId: tourId,
     companyId: companyId,
     departureDate: departureDate,

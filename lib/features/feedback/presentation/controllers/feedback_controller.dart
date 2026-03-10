@@ -3,11 +3,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 
-import '../../../../core/models/company_model.dart';
 import '../../../../core/models/feedback_model.dart';
 import '../../../../core/models/user_model.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
+import '../../../companies/data/models/company_dto.dart';
+import '../../../companies/domain/entities/company_entity.dart';
 
 /// Geri bildirim islemleri icin merkezi GetX controller.
 ///
@@ -27,8 +28,8 @@ class FeedbackController extends GetxController {
   final feedbacks = <FeedbackModel>[].obs;
   final isLoading = false.obs;
 
-  /// SA: companyId -> CompanyModel onbellegi.
-  final companyCache = <String, CompanyModel>{}.obs;
+  /// SA: companyId -> CompanyEntity onbellegi.
+  final companyCache = <String, CompanyEntity>{}.obs;
 
   /// SA: adminUid -> UserModel onbellegi.
   final adminCache = <String, UserModel>{}.obs;
@@ -75,7 +76,7 @@ class FeedbackController extends GetxController {
           .getDocument('companies', cid)
           .then((doc) {
             if (!doc.exists || doc.data() == null) return;
-            final company = CompanyModel.fromMap(doc.data()!, doc.id);
+            final company = CompanyDto.fromFirestore(doc.data()!, doc.id).toEntity();
             companyCache[cid] = company;
 
             final aUid = company.adminUid;

@@ -2,10 +2,15 @@ import 'dart:async';
 
 import 'package:get/get.dart';
 
-import '../../../../core/models/user_model.dart';
+import '../../../companies/domain/entities/company_entity.dart';
 import '../../../companies/presentation/controllers/company_controller.dart';
-import '../../../../core/services/auth_service.dart';
-import '../../../../core/services/firestore_service.dart';
+import '../../data/datasources/user_remote_data_source.dart';
+import '../../domain/entities/managed_user_entity.dart';
+import '../../domain/usecases/add_user_usecase.dart';
+import '../../domain/usecases/get_user_usecase.dart';
+import '../../domain/usecases/set_user_active_usecase.dart';
+import '../../domain/usecases/update_user_usecase.dart';
+import '../../domain/usecases/watch_users_usecase.dart';
 
 /// Kullanıcı yönetimi için merkezi GetX controller.
 ///
@@ -13,13 +18,27 @@ import '../../../../core/services/firestore_service.dart';
 /// bu controller'ı kullanır.
 /// [FirestoreService] + [AuthService] üzerinden çalışır.
 class UserController extends GetxController {
-  final FirestoreService _db;
+  final WatchUsersUseCase _watchUsers;
+  final AddUserUseCase _addUser;
+  final UpdateUserUseCase _updateUser;
+  final SetUserActiveUseCase _setUserActive;
+  final GetUserUseCase _getUser;
 
-  UserController({required FirestoreService db}) : _db = db;
+  UserController({
+    required WatchUsersUseCase watchUsers,
+    required AddUserUseCase addUser,
+    required UpdateUserUseCase updateUser,
+    required SetUserActiveUseCase setUserActive,
+    required GetUserUseCase getUser,
+  }) : _watchUsers = watchUsers,
+       _addUser = addUser,
+       _updateUser = updateUser,
+       _setUserActive = setUserActive,
+       _getUser = getUser;
 
   // ─── Reaktif State ─────────────────────────────────────────────────────────
 
-  final allUsers = <UserModel>[].obs;
+  final allUsers = <ManagedUserEntity>[].obs;
   final isLoading = false.obs;
 
   /// Arama metni filtresi.
@@ -36,7 +55,7 @@ class UserController extends GetxController {
   // ─── Computed ─────────────────────────────────────────────────────────────
 
   /// Aktif filtrelere göre hesaplanan kullanıcı listesi.
-  List<UserModel> get filteredUsers {
+  List<ManagedUserEntity> get filteredUsers {
     return allUsers.where((u) {
       final q = searchQuery.value.toLowerCase();
       final matchSearch =
@@ -56,15 +75,13 @@ class UserController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // Kullanıcı ve şirket listeleri gerçek zamanlı izlenir
-    _usersSub = _db
-        .collection('users')
-        .snapshots()
-        .listen(
-          (snap) =>
-              allUsers.value = snap.docs.map((d) => UserModel.fromMap(d.data(), d.id)).toList(),
-          onError: _handleUsersError,
-        );
+    _usersSub = _watchUsers().listen(
+      (result) => result.fold(
+        (failure) => _handleUsersError(failure.message),
+        (users) => allUsers.value = users,
+      ),
+      onError: _handleUsersError,
+    );
   }
 
   @override
@@ -96,22 +113,18 @@ class UserController extends GetxController {
   }) async {
     isLoading.value = true;
     try {
-      final uid = await AuthService.createSecondaryAuthUser(email, password);
-      await _db.setDocument(
-        'users',
-        uid,
-        UserModel(
-          uid: uid,
-          fullName: fullName,
+      final result = await _addUser(
+        CreateManagedUserPayload(
           email: email,
+          password: password,
+          fullName: fullName,
           phone: phone,
           role: role,
           companyId: companyId,
           tcNo: tcNo,
-          registeredCompanies: companyId.isNotEmpty ? [companyId] : [],
-          isDeleted: false,
-        ).toMap(),
+        ),
       );
+      result.fold((failure) => throw StateError(failure.message), (_) {});
       Get.snackbar('Başarılı', 'Kullanıcı eklendi.', snackPosition: SnackPosition.BOTTOM);
       return true;
     } catch (e) {
@@ -126,7 +139,8 @@ class UserController extends GetxController {
   Future<void> updateUser(String uid, Map<String, dynamic> data) async {
     isLoading.value = true;
     try {
-      await _db.updateDocument('users', uid, data);
+      final result = await _updateUser(uid, data);
+      result.fold((failure) => throw StateError(failure.message), (_) {});
       Get.snackbar('Başarılı', 'Kullanıcı güncellendi.', snackPosition: SnackPosition.BOTTOM);
     } catch (e) {
       Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
@@ -138,7 +152,8 @@ class UserController extends GetxController {
   /// Kullanıcıyı aktif veya pasife alır (soft delete flag'i).
   Future<void> toggleUserActive(String uid, {required bool isActive}) async {
     try {
-      await _db.updateDocument('users', uid, {'isDeleted': !isActive});
+      final result = await _setUserActive(uid, isActive: isActive);
+      result.fold((failure) => throw StateError(failure.message), (_) {});
       Get.snackbar(
         'Başarılı',
         isActive ? 'Kullanıcı aktif edildi.' : 'Kullanıcı pasife alındı.',
@@ -150,20 +165,22 @@ class UserController extends GetxController {
   }
 
   /// Belirli bir şirketin kullanıcılarını döner.
-  List<UserModel> usersForCompany(String companyId) =>
+  List<ManagedUserEntity> usersForCompany(String companyId) =>
       allUsers.where((u) => u.companyId == companyId).toList();
 
   /// UID ile tek kullanıcı getirir; bulunamazsa null döner.
-  Future<UserModel?> getUserByUid(String uid) async {
-    final doc = await _db.getDocument('users', uid);
-    if (!doc.exists || doc.data() == null) return null;
-    return UserModel.fromMap(doc.data()!, doc.id);
+  Future<ManagedUserEntity?> getUserByUid(String uid) async {
+    final result = await _getUser(uid);
+    return result.fold((failure) {
+      Get.snackbar('Hata', failure.message, snackPosition: SnackPosition.BOTTOM);
+      return null;
+    }, (user) => user);
   }
 
   /// Kullanıcıya ait şirket adını döner — CompanyController üzerinden okur.
   String companyNameOf(String companyId) {
     final cc = Get.find<CompanyController>();
-    final match = [
+    final CompanyEntity? match = [
       ...cc.activeCompanies,
       ...cc.passiveCompanies,
     ].firstWhereOrNull((c) => c.id == companyId);

@@ -159,7 +159,7 @@ class TourDto {
   });
 
   factory TourDto.fromJson(Map<String, dynamic> json, String docId) {
-    DateTime? _ts(dynamic v) => v is Timestamp ? v.toDate() : null;
+    DateTime? timestampToDate(dynamic value) => value is Timestamp ? value.toDate() : null;
 
     return TourDto(
       id: docId,
@@ -183,14 +183,14 @@ class TourDto {
           .toList(),
       departureDays: List<int>.from(json['departureDays'] ?? []),
       departureTime: json['departureTime'] as String? ?? '',
-      departureDate: _ts(json['departureDate']),
+      departureDate: timestampToDate(json['departureDate']),
       departureDates: (json['departureDates'] as List<dynamic>?)
-          ?.map((e) => _ts(e))
+          ?.map(timestampToDate)
           .whereType<DateTime>()
           .toList(),
       seriesId: json['seriesId'] as String?,
       isDeleted: _asBool(json['isDeleted']),
-      createdAt: _ts(json['createdAt']),
+      createdAt: timestampToDate(json['createdAt']),
     );
   }
 
@@ -215,7 +215,7 @@ class TourDto {
     if (departureDates != null) 'departureDates': departureDates!.map(Timestamp.fromDate).toList(),
     if (seriesId != null) 'seriesId': seriesId,
     'isDeleted': isDeleted,
-    'createdAt': FieldValue.serverTimestamp(),
+    'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
   };
 
   TourEntity toEntity() => TourEntity(

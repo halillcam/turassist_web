@@ -7,6 +7,7 @@ import '../../../../core/constants/app_strings.dart';
 import '../../../../core/services/tour_image_upload_service.dart';
 import '../../domain/entities/tour_entity.dart';
 import '../controllers/tour_controller.dart';
+import '../widgets/tour_image_upload_field.dart';
 
 class AddTourScreen extends StatefulWidget {
   final String companyId;
@@ -34,7 +35,6 @@ class _AddTourScreenState extends State<AddTourScreen> {
   final _driverNameCtrl = TextEditingController();
   final _driverPhoneCtrl = TextEditingController();
   final _plateCtrl = TextEditingController();
-  final _busCapacityCtrl = TextEditingController();
 
   final List<int> _selectedDepartureDays = [];
   final List<DateTime> _selectedDates = [];
@@ -87,7 +87,6 @@ class _AddTourScreenState extends State<AddTourScreen> {
     _driverNameCtrl.dispose();
     _driverPhoneCtrl.dispose();
     _plateCtrl.dispose();
-    _busCapacityCtrl.dispose();
     for (final d in _programDays) {
       d.dispose();
     }
@@ -177,6 +176,12 @@ class _AddTourScreenState extends State<AddTourScreen> {
       return;
     }
 
+    final program = _buildProgram();
+    if (program.isEmpty) {
+      _showSnackBar('En az bir program günü ve aktivite eklemelisiniz.', isError: true);
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final companyName = await _controller.fetchCompanyName(widget.companyId);
@@ -199,30 +204,19 @@ class _AddTourScreenState extends State<AddTourScreen> {
           driverName: _driverNameCtrl.text.trim(),
           phoneNumber: _driverPhoneCtrl.text.trim(),
           plate: _plateCtrl.text.trim(),
-          capacity: int.tryParse(_busCapacityCtrl.text) ?? 0,
+          capacity: int.tryParse(_capacityCtrl.text) ?? 0,
         ),
-        program: _buildProgram(),
+        program: program,
         departureDays: List.from(_selectedDepartureDays),
         departureTime: _departureTimeCtrl.text.trim(),
         departureDates: _selectedDates.isNotEmpty ? List.from(_selectedDates) : null,
         isDeleted: false,
       );
 
-      bool success;
-      if (_controller.isSuperAdmin) {
-        // SA akışı: tek döküman
-        success = await _controller.addSingleTour(tour);
-        if (success && mounted) {
-          _showSnackBar('Tur başarıyla eklendi.');
-          Navigator.pop(context);
-        }
-      } else {
-        // Admin akışı: her tarih için ayrı döküman
-        success = await _controller.addTourSeries(tour);
-        if (success && mounted) {
-          _showSnackBar('Tur serisi oluşturuldu.');
-          _clearForm();
-        }
+      final success = await _controller.addTourSeries(tour);
+      if (success && mounted) {
+        _showSnackBar('Tur serisi oluşturuldu.');
+        _clearForm();
       }
     } catch (e) {
       _showSnackBar('Hata: $e', isError: true);
@@ -244,7 +238,6 @@ class _AddTourScreenState extends State<AddTourScreen> {
     _driverNameCtrl.clear();
     _driverPhoneCtrl.clear();
     _plateCtrl.clear();
-    _busCapacityCtrl.clear();
     for (final d in _programDays) {
       d.dispose();
     }
@@ -300,11 +293,15 @@ class _AddTourScreenState extends State<AddTourScreen> {
 
   String _friendlyUploadError(Object error) {
     final msg = error.toString();
-    if (msg.contains('object-not-found'))
+    if (msg.contains('object-not-found')) {
       return 'Yüklenen görsel Firebase Storage üzerinde bulunamadı.';
-    if (msg.contains('unauthorized') || msg.contains('permission-denied'))
+    }
+    if (msg.contains('unauthorized') || msg.contains('permission-denied')) {
       return 'Firebase Storage yazma izni yok.';
-    if (msg.contains('bucket-not-found')) return 'Firebase Storage bucket bulunamadı.';
+    }
+    if (msg.contains('bucket-not-found')) {
+      return 'Firebase Storage bucket bulunamadı.';
+    }
     return 'Görsel yüklenemedi: $msg';
   }
 
@@ -429,7 +426,6 @@ class _AddTourScreenState extends State<AddTourScreen> {
             _field('Şoför Adı', _driverNameCtrl, width: 250),
             _field('Şoför Telefonu', _driverPhoneCtrl, width: 250, keyboard: TextInputType.phone),
             _field('Plaka', _plateCtrl, width: 200),
-            _field('Araç Kapasitesi', _busCapacityCtrl, width: 200, keyboard: TextInputType.number),
           ],
         ),
       ),
@@ -626,66 +622,13 @@ class _AddTourScreenState extends State<AddTourScreen> {
   }
 
   Widget _buildImageUploadField() {
-    final hasImage = _imageUrlCtrl.text.trim().isNotEmpty;
-    return SizedBox(
-      width: 350,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          OutlinedButton.icon(
-            onPressed: _isUploadingImage ? null : _pickAndUploadImage,
-            icon: _isUploadingImage
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.upload_file),
-            label: Text(_isUploadingImage ? 'Yükleniyor...' : 'Görsel Ekle'),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hasImage
-                ? (_uploadedImageFileName ?? 'Firebase Storage görseli hazır')
-                : 'Dosya seçildiğinde görsel Firebase Storage alanına yüklenir.',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-          ),
-          if (hasImage) ...[
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.network(
-                _imageUrlCtrl.text.trim(),
-                height: 150,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 150,
-                  color: AppColors.background,
-                  alignment: Alignment.center,
-                  child: const Text('Görsel önizlemesi alınamadı'),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: SelectableText(
-                    _imageUrlCtrl.text.trim(),
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                  ),
-                ),
-                IconButton(
-                  onPressed: _isUploadingImage ? null : _removeUploadedImage,
-                  icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                  tooltip: 'Görseli kaldır',
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
+    return TourImageUploadField(
+      isUploading: _isUploadingImage,
+      imageUrlController: _imageUrlCtrl,
+      imageUrl: _imageUrlCtrl.text,
+      uploadedImageFileName: _uploadedImageFileName,
+      onUploadPressed: _pickAndUploadImage,
+      onRemovePressed: _removeUploadedImage,
     );
   }
 
@@ -717,7 +660,7 @@ class _AddTourScreenState extends State<AddTourScreen> {
     return SizedBox(
       width: 250,
       child: DropdownButtonFormField<String>(
-        value: _selectedRegion,
+        initialValue: _selectedRegion,
         decoration: InputDecoration(
           labelText: 'Bölge *',
           isDense: true,
@@ -725,7 +668,9 @@ class _AddTourScreenState extends State<AddTourScreen> {
         ),
         items: _regions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
         onChanged: (val) {
-          if (val != null) setState(() => _selectedRegion = val);
+          if (val != null) {
+            setState(() => _selectedRegion = val);
+          }
         },
       ),
     );

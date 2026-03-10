@@ -62,6 +62,11 @@ class FirestoreService {
   /// Çağıran kod batch'i doldurur ve `batch.commit()` ile gönderir.
   WriteBatch batch() => _firestore.batch();
 
+  /// Firestore transaction çalıştırır.
+  Future<T> runTransaction<T>(TransactionHandler<T> transactionHandler) {
+    return _firestore.runTransaction(transactionHandler);
+  }
+
   /// Birden fazla koleksiyon/doküman çiftini tek atomik batch'te günceller.
   /// [updates] listesindeki her öğe `{path, docId, data}` içermelidir.
   /// Firestore limiti olan 500 işlem aşılmayacak şekilde chunk'lara bölünür.

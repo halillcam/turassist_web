@@ -1,7 +1,7 @@
 import 'package:dartz/dartz.dart';
 
 import '../../../../core/error/failures.dart';
-import '../../../../core/models/company_model.dart';
+import '../../../companies/domain/entities/company_entity.dart';
 import '../entities/tour_entity.dart';
 
 abstract class ITourRepository {
@@ -43,5 +43,5 @@ abstract class ITourRepository {
   Future<Either<Failure, String>> getCompanyName(String companyId);
 
   /// Tüm şirketleri getirir (SA şirket seçici için).
-  Future<Either<Failure, List<CompanyModel>>> getCompanies();
+  Future<Either<Failure, List<CompanyEntity>>> getCompanies();
 }

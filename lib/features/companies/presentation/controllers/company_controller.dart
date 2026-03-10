@@ -1,12 +1,14 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 
-import '../../../../core/models/company_model.dart';
-import '../../../../core/models/user_model.dart';
-import '../../../../core/services/auth_service.dart';
-import '../../../../core/services/firestore_service.dart';
+import '../../domain/entities/company_entity.dart';
+import '../../domain/usecases/add_company_usecase.dart';
+import '../../domain/usecases/get_company_usecase.dart';
+import '../../domain/usecases/set_company_status_usecase.dart';
+import '../../domain/usecases/update_company_usecase.dart';
+import '../../domain/usecases/watch_active_companies_usecase.dart';
+import '../../domain/usecases/watch_passive_companies_usecase.dart';
 
 /// Şirket CRUD operasyonları için merkezi GetX controller.
 ///
@@ -15,17 +17,34 @@ import '../../../../core/services/firestore_service.dart';
 /// [FirestoreService] + [AuthService] üzerinden çalışır;
 /// super_admin servis dosyasına bağımlılık yoktur.
 class CompanyController extends GetxController {
-  final FirestoreService _db;
+  final WatchActiveCompaniesUseCase _watchActiveCompanies;
+  final WatchPassiveCompaniesUseCase _watchPassiveCompanies;
+  final GetCompanyUseCase _getCompany;
+  final AddCompanyUseCase _addCompany;
+  final UpdateCompanyUseCase _updateCompany;
+  final SetCompanyStatusUseCase _setCompanyStatus;
 
-  CompanyController({required FirestoreService db}) : _db = db;
+  CompanyController({
+    required WatchActiveCompaniesUseCase watchActiveCompanies,
+    required WatchPassiveCompaniesUseCase watchPassiveCompanies,
+    required GetCompanyUseCase getCompany,
+    required AddCompanyUseCase addCompany,
+    required UpdateCompanyUseCase updateCompany,
+    required SetCompanyStatusUseCase setCompanyStatus,
+  }) : _watchActiveCompanies = watchActiveCompanies,
+       _watchPassiveCompanies = watchPassiveCompanies,
+       _getCompany = getCompany,
+       _addCompany = addCompany,
+       _updateCompany = updateCompany,
+       _setCompanyStatus = setCompanyStatus;
 
   // ─── Reaktif State ─────────────────────────────────────────────────────────
 
   /// Aktif (status=true) şirket listesi.
-  final activeCompanies = <CompanyModel>[].obs;
+  final activeCompanies = <CompanyEntity>[].obs;
 
   /// Pasif (status=false) şirket listesi.
-  final passiveCompanies = <CompanyModel>[].obs;
+  final passiveCompanies = <CompanyEntity>[].obs;
 
   final isLoading = false.obs;
 
@@ -37,28 +56,21 @@ class CompanyController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // Aktif ve pasif şirketler uygulama başladığında gerçek zamanlı izlenir
-    _activeSub = _db
-        .collection('companies')
-        .where('status', isEqualTo: true)
-        .snapshots()
-        .listen(
-          (snap) => activeCompanies.value = snap.docs
-              .map((d) => CompanyModel.fromMap(d.data(), d.id))
-              .toList(),
-          onError: _handleStreamError,
-        );
+    _activeSub = _watchActiveCompanies().listen(
+      (result) => result.fold(
+        (failure) => _handleStreamError(failure.message),
+        (companies) => activeCompanies.value = companies,
+      ),
+      onError: _handleStreamError,
+    );
 
-    _passiveSub = _db
-        .collection('companies')
-        .where('status', isEqualTo: false)
-        .snapshots()
-        .listen(
-          (snap) => passiveCompanies.value = snap.docs
-              .map((d) => CompanyModel.fromMap(d.data(), d.id))
-              .toList(),
-          onError: _handleStreamError,
-        );
+    _passiveSub = _watchPassiveCompanies().listen(
+      (result) => result.fold(
+        (failure) => _handleStreamError(failure.message),
+        (companies) => passiveCompanies.value = companies,
+      ),
+      onError: _handleStreamError,
+    );
   }
 
   @override
@@ -81,10 +93,12 @@ class CompanyController extends GetxController {
   // ─── Okuma ────────────────────────────────────────────────────────────────
 
   /// Tek şirketi getirir; bulunamazsa null döner.
-  Future<CompanyModel?> getCompany(String id) async {
-    final doc = await _db.getDocument('companies', id);
-    if (!doc.exists || doc.data() == null) return null;
-    return CompanyModel.fromMap(doc.data()!, doc.id);
+  Future<CompanyEntity?> getCompany(String id) async {
+    final result = await _getCompany(id);
+    return result.fold((failure) {
+      Get.snackbar('Hata', failure.message, snackPosition: SnackPosition.BOTTOM);
+      return null;
+    }, (company) => company);
   }
 
   // ─── Yazma ────────────────────────────────────────────────────────────────
@@ -105,44 +119,20 @@ class CompanyController extends GetxController {
   }) async {
     isLoading.value = true;
     try {
-      // Mevcut SA oturumunu bozmadan ikincil Firebase App üzerinden admin hesabı oluşturulur
-      final uid = await AuthService.createSecondaryAuthUser(email, password);
-
-      // Şirket doküman referansı önceden üretilir — companyId'ye ihtiyaç var
-      final companyRef = _db.collection('companies').doc();
-      final companyId = companyRef.id;
-
-      final batch = _db.batch();
-
-      // Şirket dokümanı: admin_uid ve temel bilgiler
-      batch.set(companyRef, {
-        'companyName': companyName,
-        'city': city,
-        'contactPhone': phone,
-        'logo': logo,
-        'admin_uid': uid,
-        'status': true,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Admin kullanıcı dokümanı: rol, companyId, iletişim bilgileri
-      batch.set(
-        _db.collection('users').doc(uid),
-        UserModel(
-          uid: uid,
+      final result = await _addCompany(
+        AddCompanyParams(
+          companyName: companyName,
           fullName: fullName,
-          email: email,
           phone: phone,
-          role: 'admin',
-          companyId: companyId,
-          registeredCompanies: [companyId],
-          isDeleted: false,
-        ).toMap(),
+          email: email,
+          password: password,
+          city: city,
+          logo: logo,
+        ),
       );
-
-      await batch.commit();
-
-      Get.snackbar('Başarılı', 'Şirket başarıyla eklendi.', snackPosition: SnackPosition.BOTTOM);
+      result.fold((failure) => throw StateError(failure.message), (_) {
+        Get.snackbar('Başarılı', 'Şirket başarıyla eklendi.', snackPosition: SnackPosition.BOTTOM);
+      });
     } catch (e) {
       Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
       rethrow;
@@ -155,7 +145,8 @@ class CompanyController extends GetxController {
   Future<void> updateCompany(String companyId, Map<String, dynamic> data) async {
     isLoading.value = true;
     try {
-      await _db.updateDocument('companies', companyId, data);
+      final result = await _updateCompany(UpdateCompanyParams(companyId: companyId, data: data));
+      result.fold((failure) => throw StateError(failure.message), (_) {});
       Get.snackbar('Başarılı', 'Şirket güncellendi.', snackPosition: SnackPosition.BOTTOM);
     } catch (e) {
       Get.snackbar('Hata', e.toString(), snackPosition: SnackPosition.BOTTOM);
@@ -168,7 +159,10 @@ class CompanyController extends GetxController {
   /// Şirketi aktif veya pasife alır.
   Future<void> setCompanyStatus(String companyId, {required bool isActive}) async {
     try {
-      await _db.updateDocument('companies', companyId, {'status': isActive});
+      final result = await _setCompanyStatus(
+        SetCompanyStatusParams(companyId: companyId, isActive: isActive),
+      );
+      result.fold((failure) => throw StateError(failure.message), (_) {});
       Get.snackbar(
         'Başarılı',
         isActive ? 'Şirket aktif edildi.' : 'Şirket pasife alındı.',

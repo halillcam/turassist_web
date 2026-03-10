@@ -1,7 +1,8 @@
 import 'package:dartz/dartz.dart';
 
 import '../../../../core/error/failures.dart';
-import '../../../../core/models/company_model.dart';
+import '../../../companies/data/models/company_dto.dart';
+import '../../../companies/domain/entities/company_entity.dart';
 import '../../domain/entities/tour_entity.dart';
 import '../../domain/repositories/i_tour_repository.dart';
 import '../datasources/tour_remote_data_source.dart';
@@ -124,10 +125,10 @@ class TourRepositoryImpl implements ITourRepository {
   }
 
   @override
-  Future<Either<Failure, List<CompanyModel>>> getCompanies() async {
+  Future<Either<Failure, List<CompanyEntity>>> getCompanies() async {
     try {
       final list = await _dataSource.getCompanies();
-      return Right(list);
+      return Right(list.map((dto) => dto.toEntity()).toList());
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
