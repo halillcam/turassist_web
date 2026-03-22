@@ -68,20 +68,3 @@ Not
 
 Bu proje, tur firmalarının operasyon süreçlerini daha verimli hale getirmek amacıyla, manuel ve mesajlaşma tabanlı yönetim yöntemlerine alternatif olarak geliştirilmiştir.
 
-## Environment setup
-
-Firebase ayarlari artik `.env` dosyasindan okunur.
-
-1. `.env.example` dosyasini referans alip proje kokunde `.env` olusturun.
-2. Firebase degerlerini kendi projenize gore doldurun.
-3. `flutter pub get` calistirin.
-4. Uygulamayi normal sekilde baslatin.
-
-`.env` git tarafinda ignore edilir. Repoda sadece `.env.example` tutulur.
-
-## Run
-
-```bash
-flutter pub get
-flutter run -d chrome
-```
