@@ -71,8 +71,10 @@ class ParticipantController extends GetxController {
     if (departureDate == null) return allTickets;
     return allTickets.where((ticket) {
       final ticketDate = ticket.departureDate;
-      return ticketDate != null &&
-          ticketDate.year == departureDate.year &&
+      if (ticketDate == null) {
+        return true;
+      }
+      return ticketDate.year == departureDate.year &&
           ticketDate.month == departureDate.month &&
           ticketDate.day == departureDate.day;
     }).toList();

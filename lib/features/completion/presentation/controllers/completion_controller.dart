@@ -79,12 +79,15 @@ class CompletionController extends GetxController {
       final panelCustomerIds = await _resolvePanelCustomerIds(affectedTourIds, companyId);
       final usersToDeactivate = <String>{};
 
-      if (guideId.isNotEmpty && !await _guideHasOtherActiveTours(guideId, affectedTourIds)) {
+      if (guideId.isNotEmpty &&
+          await _canAdminManageUser(guideId, companyId) &&
+          !await _guideHasOtherActiveTours(guideId, affectedTourIds)) {
         usersToDeactivate.add(guideId);
       }
 
       for (final userId in panelCustomerIds) {
-        if (!await _panelCustomerHasOtherActiveTours(userId, affectedTourIds, companyId)) {
+        if (await _canAdminManageUser(userId, companyId) &&
+            !await _panelCustomerHasOtherActiveTours(userId, affectedTourIds)) {
           usersToDeactivate.add(userId);
         }
       }
@@ -146,22 +149,43 @@ class CompletionController extends GetxController {
   Future<Set<String>> _resolvePanelCustomerIds(List<String> tourIds, String companyId) async {
     final userIds = <String>{};
     for (final chunk in _chunk(tourIds, 10)) {
-      final ticketSnap = await _db
-          .collection('tickets')
-          .where('companyId', isEqualTo: companyId)
-          .where('tourId', whereIn: chunk)
-          .get();
+      final ticketSnap = await _db.collection('tickets').where('tourId', whereIn: chunk).get();
       for (final doc in ticketSnap.docs) {
         final userId = doc.data()['userId'] as String?;
         if (userId == null || userId.isEmpty) continue;
-        final userDoc = await _db.getDocument('users', userId);
-        final userData = userDoc.data();
-        if (userDoc.exists && userData?['isPanelManagedCustomer'] == true) {
-          userIds.add(userId);
+        try {
+          final userDoc = await _db.getDocument('users', userId);
+          final userData = userDoc.data();
+          if (userDoc.exists &&
+              userData?['isPanelManagedCustomer'] == true &&
+              _matchesCompany(userData, companyId)) {
+            userIds.add(userId);
+          }
+        } catch (_) {
+          // Legacy or foreign-company user docs should not block tour approval.
         }
       }
     }
     return userIds;
+  }
+
+  Future<bool> _canAdminManageUser(String userId, String companyId) async {
+    try {
+      final userDoc = await _db.getDocument('users', userId);
+      final userData = userDoc.data();
+      if (!userDoc.exists || userData == null) {
+        return false;
+      }
+
+      final role = userData['role'] as String? ?? '';
+      if (role == 'super_admin' || role == 'admin') {
+        return false;
+      }
+
+      return _matchesCompany(userData, companyId);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> _guideHasOtherActiveTours(String guideId, List<String> affectedTourIds) async {
@@ -176,11 +200,9 @@ class CompletionController extends GetxController {
   Future<bool> _panelCustomerHasOtherActiveTours(
     String userId,
     List<String> affectedTourIds,
-    String companyId,
   ) async {
     final snap = await _db
         .collection('tickets')
-        .where('companyId', isEqualTo: companyId)
         .where('userId', isEqualTo: userId)
         .where('status', isEqualTo: 'active')
         .get();
@@ -197,6 +219,23 @@ class CompletionController extends GetxController {
       if (otherTour.exists && otherTourData?['isDeleted'] != true) {
         return true;
       }
+    }
+
+    return false;
+  }
+
+  bool _matchesCompany(Map<String, dynamic>? data, String companyId) {
+    if (data == null || companyId.isEmpty) {
+      return false;
+    }
+
+    if (data['companyId'] == companyId) {
+      return true;
+    }
+
+    final registeredCompanies = data['registeredCompanies'];
+    if (registeredCompanies is Iterable) {
+      return registeredCompanies.whereType<String>().contains(companyId);
     }
 
     return false;

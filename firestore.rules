@@ -73,6 +73,20 @@ service cloud.firestore {
       return isSuperAdmin() || (isAdmin() && belongsToCurrentCompany(companyId));
     }
 
+    function userBelongsToCurrentCompany(userData) {
+      return hasUserDoc() && (
+        userData.companyId == currentCompanyId() ||
+        (userData.registeredCompanies != null && currentCompanyId() in userData.registeredCompanies)
+      );
+    }
+
+    function ticketBelongsToCurrentCompany(ticketData) {
+      return ticketData.companyId == currentCompanyId() ||
+        (ticketData.tourId is string &&
+          hasTour(ticketData.tourId) &&
+          tourDoc(ticketData.tourId).companyId == currentCompanyId());
+    }
+
     function canReadTours() {
       // Tur listesi herkese açık: giriş yapan da yapmayan da turları görebilmeli.
       return true;
@@ -89,25 +103,14 @@ service cloud.firestore {
         resource.data.capacity > 0 &&
         request.resource.data.capacity == resource.data.capacity - 1 &&
         request.resource.data.companyId == resource.data.companyId &&
-        request.resource.data.title == resource.data.title &&
-        request.resource.data.description == resource.data.description &&
-        request.resource.data.extraDetail == resource.data.extraDetail &&
-        request.resource.data.price == resource.data.price &&
-        request.resource.data.imageUrl == resource.data.imageUrl &&
-        request.resource.data.companyName == resource.data.companyName &&
-        request.resource.data.guideId == resource.data.guideId &&
-        request.resource.data.guideName == resource.data.guideName &&
-        request.resource.data.city == resource.data.city &&
-        request.resource.data.region == resource.data.region &&
-        request.resource.data.busInfo == resource.data.busInfo &&
-        request.resource.data.program == resource.data.program &&
-        request.resource.data.departureDays == resource.data.departureDays &&
-        request.resource.data.departureTime == resource.data.departureTime &&
-        request.resource.data.departureDate == resource.data.departureDate &&
-        request.resource.data.departureDates == resource.data.departureDates &&
-        request.resource.data.seriesId == resource.data.seriesId &&
-        request.resource.data.createdAt == resource.data.createdAt &&
-        request.resource.data.isDeleted == resource.data.isDeleted;
+        request.resource.data.isDeleted == resource.data.isDeleted &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['capacity']);
+    }
+
+    function canReadNotificationTarget(targetCompanyId, isBroadcast) {
+      return isSuperAdmin() ||
+        (hasUserDoc() && isBroadcast == true) ||
+        canViewCompany(targetCompanyId);
     }
 
     function isCustomerOwnTicketCreate() {
@@ -165,18 +168,18 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSuperAdmin() ||
         isSelf(userId) ||
-        (isAdmin() && resource.data.companyId == currentCompanyId());
+        (isAdmin() && userBelongsToCurrentCompany(resource.data));
 
       allow create: if isSuperAdmin() ||
         (isAdmin() &&
-          request.resource.data.companyId == currentCompanyId() &&
+          userBelongsToCurrentCompany(request.resource.data) &&
           request.resource.data.role in ['guide', 'customer']);
 
       allow update: if isSuperAdmin() ||
         (isSelf(userId) && preservesOwnUserSecurityFields()) ||
         (isAdmin() &&
-          resource.data.companyId == currentCompanyId() &&
-          request.resource.data.companyId == resource.data.companyId &&
+          userBelongsToCurrentCompany(resource.data) &&
+          userBelongsToCurrentCompany(request.resource.data) &&
           request.resource.data.role == resource.data.role &&
           resource.data.role != 'super_admin');
 
@@ -229,7 +232,7 @@ service cloud.firestore {
     // ─── Biletler ──────────────────────────────────────────────────────────
     match /tickets/{ticketId} {
       allow read: if isSuperAdmin() ||
-        (isAdmin() && resource.data.companyId == currentCompanyId()) ||
+        (isAdmin() && ticketBelongsToCurrentCompany(resource.data)) ||
         isSelf(resource.data.userId) ||
         isGuideForTour(resource.data.tourId);
 
@@ -244,8 +247,8 @@ service cloud.firestore {
 
       allow update: if isSuperAdmin() ||
         (isAdmin() &&
-          resource.data.companyId == currentCompanyId() &&
-          request.resource.data.companyId == resource.data.companyId &&
+          ticketBelongsToCurrentCompany(resource.data) &&
+          ticketBelongsToCurrentCompany(request.resource.data) &&
           request.resource.data.tourId == resource.data.tourId &&
           request.resource.data.userId == resource.data.userId) ||
         (isGuideForTour(resource.data.tourId) &&
@@ -257,12 +260,15 @@ service cloud.firestore {
         isCustomerOwnTicketCancel();
 
       allow delete: if isSuperAdmin() ||
-        (isAdmin() && resource.data.companyId == currentCompanyId());
+        (isAdmin() && ticketBelongsToCurrentCompany(resource.data));
     }
 
     // ─── Bildirimler ───────────────────────────────────────────────────────
     match /notifications/{notifId} {
-      allow read: if isSuperAdmin() || canViewCompany(resource.data.targetCompanyId);
+      allow read: if canReadNotificationTarget(
+        resource.data.targetCompanyId,
+        resource.data.isBroadcast,
+      );
 
       allow create: if
         (isSuperAdmin() && request.resource.data.senderRole == 'super_admin') ||
@@ -273,8 +279,9 @@ service cloud.firestore {
           request.resource.data.targetCompanyId == currentCompanyId());
 
       allow update: if isSuperAdmin() ||
-        (canViewCompany(resource.data.targetCompanyId) &&
+        (canReadNotificationTarget(resource.data.targetCompanyId, resource.data.isBroadcast) &&
           request.resource.data.targetCompanyId == resource.data.targetCompanyId &&
+          request.resource.data.isBroadcast == resource.data.isBroadcast &&
           request.resource.data.senderRole == resource.data.senderRole &&
           request.resource.data.title == resource.data.title &&
           request.resource.data.body == resource.data.body &&

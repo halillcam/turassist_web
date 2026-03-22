@@ -45,15 +45,17 @@ class NotificationController extends GetxController {
     _notifSub?.cancel();
     _notifSub = _db
         .collection('notifications')
-        .where('targetCompanyId', isEqualTo: companyId)
-        .orderBy('createdAt', descending: true)
+        .where('targetCompanyId', whereIn: [companyId, ''])
         .snapshots()
-        .listen(
-          (snap) => notifications.value = snap.docs
-              .map((d) => NotificationModel.fromMap(d.data(), d.id))
-              .toList(),
-          onError: _handleNotificationError,
-        );
+        .listen((snap) {
+          final items = snap.docs.map((d) => NotificationModel.fromMap(d.data(), d.id)).toList()
+            ..sort((a, b) {
+              final aMs = a.createdAt?.millisecondsSinceEpoch ?? 0;
+              final bMs = b.createdAt?.millisecondsSinceEpoch ?? 0;
+              return bMs.compareTo(aMs);
+            });
+          notifications.value = items;
+        }, onError: _handleNotificationError);
   }
 
   /// Bildirimi okundu olarak işaretler.
@@ -62,16 +64,10 @@ class NotificationController extends GetxController {
   }
 
   /// Şirkete ait tüm okunmamış bildirimleri toplu okundu yapar.
-  Future<void> markAllRead(String companyId) async {
-    final snap = await _db
-        .collection('notifications')
-        .where('targetCompanyId', isEqualTo: companyId)
-        .where('isRead', isEqualTo: false)
-        .get();
-
+  Future<void> markAllRead(String _companyId) async {
     final batch = _db.batch();
-    for (final doc in snap.docs) {
-      batch.update(doc.reference, {'isRead': true});
+    for (final notification in notifications.where((item) => !item.isRead && item.id != null)) {
+      batch.update(_db.collection('notifications').doc(notification.id), {'isRead': true});
     }
     await batch.commit();
   }
@@ -124,6 +120,7 @@ class NotificationController extends GetxController {
       final data = {
         'title': title,
         'body': body,
+        'senderRole': 'super_admin',
         'targetCompanyId': targetCompanyId ?? '',
         'isBroadcast': targetCompanyId == null,
         'isRead': false,
